@@ -17,7 +17,6 @@ add_clang_subdirectory(clang-format-vs)
 3. Build
 ```
 cd <LLVM_OBJ>
-cmake -DCMAKE_BUILD_TYPE=Debug ../llvm-8.0.0.src
 make gp-source-rewriter
 ```
 ## Running the tool
