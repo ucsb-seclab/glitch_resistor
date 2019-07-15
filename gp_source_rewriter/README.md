@@ -18,11 +18,11 @@ add_clang_subdirectory(clang-format-vs)
 ```
 cd <LLVM_OBJ>
 cmake -DCMAKE_BUILD_TYPE=Debug ../llvm-8.0.0.src
-make gp_source_rewriter
+make gp-source-rewriter
 ```
 ## Running the tool
 We run the tool the same way as we run any compiler i.e., `gcc` or `clang`
 ```
 cd <LLVM_OBJ>/bin
-./gp_source_rewriter [COMPILER ARGS] [SOURCE FILES]
+./gp-source-rewriter [COMPILER ARGS] [SOURCE FILES]
 ```
