@@ -3,7 +3,7 @@ This contains all the defenses (compiler based) for the Glitch Please project.
 ## Dependencies
 * Clang/LLVM 8.0.0
 ### Installing LLVM/Clang
-> Building LLVM and Clang from sources (This needs ~340GB disk space and compilation time of ~90min)
+> Building LLVM and Clang from sources (This needs ~40GB disk space and compilation time of ~90min)
 
 1) Download [LLVM-8.0.0](http://llvm.org/releases/8.0.0/llvm-8.0.0.src.tar.xz), [clang-8.0.0](http://llvm.org/releases/8.0.0/cfe-8.0.0.src.tar.xz)
 

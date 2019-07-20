@@ -17,11 +17,11 @@ add_clang_subdirectory(clang-format-vs)
 3. Build
 ```
 cd <LLVM_OBJ>
-make gp_source_rewriter
+make gp-source-rewriter
 ```
 ## Running the tool
 We run the tool the same way as we run any compiler i.e., `gcc` or `clang`
 ```
 cd <LLVM_OBJ>/bin
-./gp_source_rewriter [COMPILER ARGS] [SOURCE FILES]
+./gp-source-rewriter [COMPILER ARGS] [SOURCE FILES]
 ```
