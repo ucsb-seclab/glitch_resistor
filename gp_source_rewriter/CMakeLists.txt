@@ -8,6 +8,8 @@ add_clang_executable(gp-source-rewriter
   src/SourceRewriter.cpp
   src/GlobalProgramInfo.cpp
   src/RWTypeDetector.cpp
+  src/PersistentSourceLoc.cpp
+  src/Utils.cpp
   )
 
 include_directories(include/)
