@@ -36,6 +36,12 @@ cl::opt<bool> Verbose("verbose",
                       cl::init(false),
                       cl::cat(GPOptions));
 
+cl::opt<bool> AllInitializers("allinit",
+                              cl::desc("Replace an enum only if none "
+                                       "of the enum values have initializers."),
+                              cl::init(false),
+                              cl::cat(GPOptions));
+
 template <typename T, typename V>
 class GenericAction : public ASTFrontendAction {
 public:

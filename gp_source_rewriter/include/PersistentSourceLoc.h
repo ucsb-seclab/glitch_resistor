@@ -17,6 +17,7 @@
 #include "llvm/Support/ErrorHandling.h"
 
 namespace GLitchPlease {
+
   /***
    * This class specifies a location in a source file that persists across
    * invocations of the frontend. Given a Decl/Stmt/Expr, the FullSourceLoc

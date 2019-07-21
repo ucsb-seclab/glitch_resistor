@@ -8,6 +8,10 @@
 #include <set>
 #include <ctime>
 #include <string>
+#include "llvm/Support/CommandLine.h"
+
+extern llvm::cl::opt<bool> AllInitializers;
+
 
 bool getAbsoluteFilePath(std::string fileName, std::string &absoluteFP);
 

@@ -9,6 +9,8 @@ add_clang_executable(gp-source-rewriter
   src/GlobalProgramInfo.cpp
   src/RWTypeDetector.cpp
   src/PersistentSourceLoc.cpp
+  src/DefenseHelper.cpp
+  src/RewriteHelper.cpp
   src/Utils.cpp
   )
 
