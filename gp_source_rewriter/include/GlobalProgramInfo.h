@@ -22,6 +22,7 @@ namespace GLitchPlease {
   typedef std::pair<PersistentSourceLoc, std::string> SourceWithName;
   // clang independent storage of enums to be replaced.
   typedef std::map<SourceWithName, std::set<SourceWithName>> EnumFields;
+  // constants generated for each of the enum field.
   typedef std::map<SourceWithName, unsigned> FieldConstMap;
 
   /***
@@ -39,7 +40,10 @@ namespace GLitchPlease {
     EnumFields& getToChangeEnumFields() { return toChangeEnumFields; };
     bool insertFieldConstant(SourceWithName &fldKey, unsigned newConst) {
       generatedConstants[fldKey] = newConst;
+      return true;
     }
+
+    FieldConstMap& getFieldConstantMap() { return generatedConstants; }
 
   private:
     EnumFields toChangeEnumFields;

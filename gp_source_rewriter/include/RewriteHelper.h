@@ -12,7 +12,12 @@
 
 #include "GlobalProgramInfo.h"
 
+using namespace clang;
 namespace GLitchPlease {
+
+  /**
+   * This class handles the rewriting of the files.
+   */
   class RewriteConsumer : public ASTConsumer {
   public:
     explicit RewriteConsumer(GlobalProgramInfo &I,

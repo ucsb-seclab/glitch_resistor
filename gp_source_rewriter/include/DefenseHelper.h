@@ -8,9 +8,16 @@
 #include "GlobalProgramInfo.h"
 
 namespace GLitchPlease {
+  /**
+   * Class that holds all the logic to generate constansts.
+   */
   class DefenseHelper {
   public:
     DefenseHelper(GlobalProgramInfo &I): Info(I) { }
+    /**
+     * Generate hamming distance constants for the
+     * observed enum fields.
+     */
     bool generateHammingConstantsForEnumFields();
   private:
     GlobalProgramInfo &Info;

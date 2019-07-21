@@ -58,8 +58,7 @@ PersistentSourceLoc::mkPSL(clang::SourceRange SR, SourceLocation SL, ASTContext 
     fn = sys::path::remove_leading_dotslash(feAbsS);
   }
 
-  PersistentSourceLoc PSL(fn,
-                          FESL.getExpansionLineNumber(), FESL.getExpansionColumnNumber());
+  PersistentSourceLoc PSL(fn, FESL.getExpansionLineNumber(), FESL.getExpansionColumnNumber());
 
   return PSL;
 }

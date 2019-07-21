@@ -1,7 +1,9 @@
 #include<stdio.h>
 enum help {
-  FOO,
-  BAR
+  FOO = 3,
+  BAR,
+  BAZ,
+  BAL
 };
 int main() {
     enum help d;
