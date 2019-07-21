@@ -6,6 +6,7 @@
 #include "Utils.h"
 
 using namespace GLitchPlease;
+using namespace llvm;
 
 bool DefenseHelper::generateHammingConstantsForEnumFields() {
   EnumFields &toChange = Info.getToChangeEnumFields();
