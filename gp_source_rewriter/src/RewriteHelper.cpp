@@ -13,10 +13,10 @@ using namespace llvm;
 using namespace GLitchPlease;
 
 /**
- *
- * @param R
- * @param SR
- * @return
+ *  Check if we can rewrite the provided source range.
+ * @param R Rewriter to use.
+ * @param SR Source range to write.
+ * @return true if can be rewritten else false.
  */
 static bool canRewrite(Rewriter &R, SourceRange &SR) {
   return SR.isValid() && (R.getRangeSize(SR) != -1);
