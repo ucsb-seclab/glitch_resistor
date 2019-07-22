@@ -21,4 +21,13 @@ extern llvm::cl::opt<bool> Verbose;
  */
 bool getAbsoluteFilePath(std::string fileName, std::string &absoluteFP);
 
+/**
+ * Generate numbers with maximum hamming distance.
+ *
+ * @param num total numbers to be generated.
+ * @param output vector into which the generated numbers should be inserted.
+ * @return true if successful else false
+ */
+bool generateNumbersWithMaximumHamming(unsigned num, std::vector<unsigned> &output);
+
 #endif //LLVM_UTILS_H

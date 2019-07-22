@@ -14,12 +14,19 @@ bool DefenseHelper::generateHammingConstantsForEnumFields() {
     if(Verbose) {
       errs() << "[*] Trying to generate new enum-constants for the enum:" << enumInfo.first.second << "\n";
     }
+
     // enumInfo.second is the set of enum fields
     // for which the constants need to be generated.
-    // TODO: generate valid constants.
+    std::vector<unsigned> enumConstants;
+    enumConstants.clear();
+
+    // generate numbers with maximum hamming distance.
+    generateNumbersWithMaximumHamming(enumInfo.second.size(), enumConstants);
+
+    
     unsigned toInsert = 0;
     for(auto fldKey: enumInfo.second) {
-      Info.insertFieldConstant(fldKey, toInsert);
+      Info.insertFieldConstant(fldKey, enumConstants[toInsert]);
       toInsert++;
     }
   }

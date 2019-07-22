@@ -13,7 +13,10 @@ namespace GLitchPlease {
    */
   class DefenseHelper {
   public:
-    DefenseHelper(GlobalProgramInfo &I): Info(I) { }
+    DefenseHelper(GlobalProgramInfo &I): Info(I) {
+      // initialize random seed.
+      srand(time(NULL));
+    }
     /**
      * Generate hamming distance constants for the
      * observed enum fields.
