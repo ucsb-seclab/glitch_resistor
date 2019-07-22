@@ -63,3 +63,12 @@ gp-source-rewriter options:
         suffix of a path in the compile command database.
 
 ```
+
+### Example:
+```
+$ gp-source-rewriter -output-postfix=glitch simple.c
+# this will create the file simple.glitch.c which contains enums in simple.c replaced with hamming constants.
+```
+
+### TODO:
+* Instructions to run a tool on a project.
