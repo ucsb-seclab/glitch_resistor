@@ -1,3 +1,6 @@
+llvm-8.0.0.src
+llvm-8.0.0.obj
+
 # Prerequisites
 *.d
 
