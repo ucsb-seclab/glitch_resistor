@@ -105,6 +105,23 @@ namespace GLitchPlease {
     }
 
 
+    /***
+     * The function is the insertion oracle. This returns true
+     * if delay has to be inserted at (before or after) the instruction.
+     * @param currInstr Insruction before which the delay has to be inserted.
+     * @param [Output] after Flag that indicates that the delay has to be inserted after
+     *                       the currInstr.
+     * @return true if the delay has to be inserted else false.
+     */
+    bool canInsertDelay(Instruction *currInstr, bool &after) {
+      //TODO: fill this up with reasonable checks
+      // as of now we insert delay before each switch statement.
+      // but this can be changed.
+      after = false;
+      return dyn_cast<SwitchInst>(currInstr) != nullptr;
+    }
+
+
     bool runOnModule(Module &m) override {
       bool edited = false;
       //iterate through each function.
@@ -114,8 +131,10 @@ namespace GLitchPlease {
             for (auto &instr: bb) {
               // this is the current instruction.
               Instruction *currInstr = &instr;
-              // TODO: we need to make a decision to check
-              // if we have to insert the call to a delay function.
+              bool after;
+              if(canInsertDelay(currInstr, after)) {
+                insertDelay(currInstr, after);
+              }
             }
           }
         }
