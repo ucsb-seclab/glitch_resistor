@@ -29,6 +29,18 @@ export LLVM_OBJ=your_path_to_llvm-8.0.0.obj
 export LLVM_DIR=your_path_to_llvm-8.0.0.obj
 export PATH=$LLVM_DIR/bin:$PATH
 ```
+
+#### Easy way
+If you have `direnv` installed (i.e., `sudo apt-get install direnv`), and [configured](https://direnv.net/docs/hook.md), you can simply do the following:
+```bash
+./setup_dev_environment.sh
+```
+
+This will also add the `bin` directory of our Source Rewriter to your direnv path so that you can use it via:
+```bash
+gp-source-rewriter
+```
+
 ## Defenses
 There are two main components of our defense:
 * Source Rewriter (*gp_source_rewriter*)
