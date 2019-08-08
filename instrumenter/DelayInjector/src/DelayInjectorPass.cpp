@@ -38,12 +38,12 @@ namespace GLitchPlease {
   /***
    * The main pass.
    */
-  struct DelayInjectorPass : public ModulePass {
+  struct DelayInjectorPass : public FunctionPass {
   public:
     static char ID;
     Function *delayFunction;
 
-    DelayInjectorPass() : ModulePass(ID) {
+    DelayInjectorPass() : FunctionPass(ID) {
       this->delayFunction = nullptr;
     }
 
@@ -122,19 +122,21 @@ namespace GLitchPlease {
     }
 
 
-    bool runOnModule(Module &m) override {
+    bool runOnFunction(Function &F) override {
       bool edited = false;
-      //iterate through each function.
-      for(auto &currF: m) {
-        if(isFunctionSafeToModify(&currF)) {
-          for (auto &bb: currF) {
-            for (auto &instr: bb) {
-              // this is the current instruction.
-              Instruction *currInstr = &instr;
-              bool after;
-              if(canInsertDelay(currInstr, after)) {
-                insertDelay(currInstr, after);
-              }
+      errs() << "I saw a function called " << F.getName() << "!\n";
+      if(isFunctionSafeToModify(&F)) {
+        for (auto &bb: F) {
+          errs() << "I saw a bb called " << bb.getName() << "!\n";
+          insertDelay(&bb.front(), false);
+
+          for (auto &instr: bb) {
+            
+            // this is the current instruction.
+            Instruction *currInstr = &instr;
+            bool after;
+            if(canInsertDelay(currInstr, after)) {
+              insertDelay(currInstr, after);
             }
           }
         }
