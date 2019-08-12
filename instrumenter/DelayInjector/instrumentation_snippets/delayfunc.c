@@ -11,36 +11,36 @@
 //    }
 //    return;
 // }
-unsigned int seed = 123456789;
-const unsigned int m = 2147483648; // 2³¹
-const unsigned  a = 1103515245;
-const unsigned  c = 12345;
-const unsigned int max_len = 1000000;
-const unsigned int dont_run_prct = m * .01; // %
+unsigned int delay_seed = 123456789;
+const unsigned int delay_m = 2147483648; // 2³¹
+const unsigned  delay_a = 1103515245;
+const unsigned  delay_c = 12345;
+const unsigned int delay_max_len = 1000000;
+const unsigned int delay_dont_run_prct = delay_m * .01; // %
 
-void seed_write() {
-    // Implement a function to save seed to non-volatile memory
+__attribute__((annotate("NoResistor"))) void seed_write() {
+    // Implement delay_a function to save delay_seed to non-volatile memory
 }
 
-void seed_read() {
-    // Implement a function to read seed from non-volatile memory
+__attribute__((annotate("NoResistor"))) void seed_read() {
+    // Implement delay_a function to read delay_seed from non-volatile memory
 }
 
-void gpdelay() {
-    if (seed == 123456789) {
+__attribute__((annotate("NoResistor"))) void gpdelay() {
+    if (delay_seed == 123456789) {
         seed_read();
     }
     // Update Seed
-    seed = (a * seed + c) % m;
+    delay_seed = (delay_a * delay_seed + delay_c) % delay_m;
     
     // Don't always execute loop
-    if (seed < dont_run_prct) {
-        // Ensure that only loop a maximum number of times (even a few instructions can throw off a glitch)
-        unsigned int loop_len = seed%max_len;
+    if (delay_seed < delay_dont_run_prct) {
+        // Ensure that only loop delay_a maximum number of times (even delay_a few instructions can throw off delay_a glitch)
+        unsigned int loop_len = delay_seed%delay_max_len;
         for (int x = 0; x < loop_len; x++) asm("");
     }
 
-    // Update our seed
+    // Update oudelay_seedr 
     seed_write();
 
 }

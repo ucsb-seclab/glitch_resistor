@@ -19,7 +19,7 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
-
+#include <set>
 
 using namespace llvm;
 
@@ -42,6 +42,8 @@ namespace GLitchPlease {
   public:
     static char ID;
     Function *delayFunction;
+    std::set<Function*> annotFuncs;
+    std::string AnnotationString = "NoResistor";
 
     DelayInjectorPass() : FunctionPass(ID) {
       this->delayFunction = nullptr;
@@ -61,6 +63,43 @@ namespace GLitchPlease {
 
 
     ~DelayInjectorPass() {
+    }
+
+
+    virtual bool doInitialization(Module &M)override{
+        getAnnotatedFunctions(&M);
+        return false;
+    }
+    /**
+     * Return false if this function was explicitly annoted to passed over
+     */
+    bool shouldInstrumentFunc(Function &F){
+        return annotFuncs.find(&F)==annotFuncs.end();
+    }
+
+    /** 
+     * Get a list of all of the annotated functions
+     */
+    void getAnnotatedFunctions(Module *M){
+        for (Module::global_iterator I = M->global_begin(),
+                E = M->global_end();
+                I != E;
+                ++I) {
+
+            if (I->getName() == "llvm.global.annotations") {
+                ConstantArray *CA = dyn_cast<ConstantArray>(I->getOperand(0));
+                for(auto OI = CA->op_begin(); OI != CA->op_end(); ++OI){
+                    ConstantStruct *CS = dyn_cast<ConstantStruct>(OI->get());
+                    Function *FUNC = dyn_cast<Function>(CS->getOperand(0)->getOperand(0));
+                    GlobalVariable *AnnotationGL = dyn_cast<GlobalVariable>(CS->getOperand(1)->getOperand(0));
+                    StringRef annotation = dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())->getAsCString();
+                    if(annotation.compare(AnnotationString)==0){
+                        annotFuncs.insert(FUNC);
+                        errs() << "Found annotated function " << FUNC->getName()<<"\n";
+                    }
+                }
+            }
+        }
     }
 
     /***
@@ -123,22 +162,25 @@ namespace GLitchPlease {
 
 
     bool runOnFunction(Function &F) override {
+      if(shouldInstrumentFunc(F)==false) {
+            return false;
+      }
+
       bool edited = false;
       errs() << "I saw a function called " << F.getName() << "!\n";
       if(isFunctionSafeToModify(&F)) {
         for (auto &bb: F) {
           errs() << "I saw a bb called " << bb.getName() << "!\n";
-          insertDelay(&bb.front(), false);
-
-          for (auto &instr: bb) {
+          insertDelay(&bb.back(), false);
+          // for (auto &instr: bb) {
             
-            // this is the current instruction.
-            Instruction *currInstr = &instr;
-            bool after;
-            if(canInsertDelay(currInstr, after)) {
-              insertDelay(currInstr, after);
-            }
-          }
+          //   // this is the current instruction.
+          //   Instruction *currInstr = &instr;
+          //   bool after;
+          //   if(canInsertDelay(currInstr, after)) {
+          //     insertDelay(currInstr, after);
+          //   }
+          // }
         }
       }
 
@@ -154,4 +196,15 @@ namespace GLitchPlease {
                                             "inserting call to functions that cause random delays.",
                                             false,
                                             false);
+
+  // Pass loading stuff
+  // To use, run: clang -Xclang -load -Xclang <your-pass>.so <other-args> ...
+
+  // This function is of type PassManagerBuilder::ExtensionFn
+  static void loadPass(const PassManagerBuilder &Builder, llvm::legacy::PassManagerBase &PM) {
+    PM.add(new DelayInjectorPass());
+  }
+  // These constructors add our pass to a list of global extensions.
+  static RegisterStandardPasses clangtoolLoader_Ox(PassManagerBuilder::EP_OptimizerLast, loadPass);
+  static RegisterStandardPasses clangtoolLoader_O0(PassManagerBuilder::EP_EnabledOnOptLevel0, loadPass);
 }
