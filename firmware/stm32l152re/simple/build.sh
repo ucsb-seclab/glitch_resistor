@@ -2,5 +2,5 @@
   
 export LLVM_COMPILER=clang
 export CC=wllvm
-export CLANG_FLAGS="-Xclang -load -Xclang ../../../instrumenter/build/DelayInjector/libDelayInjector.so --verbose"
+export CLANG_FLAGS="-Xclang -load -Xclang ../../../instrumenter/build/DelayInjector/libDelayInjector.so"
 CC=clang make

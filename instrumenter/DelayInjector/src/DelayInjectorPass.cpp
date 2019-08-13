@@ -66,10 +66,14 @@ namespace GLitchPlease {
     }
 
 
+    /**
+     * Initialize our annotated functions set
+     */
     virtual bool doInitialization(Module &M)override{
         getAnnotatedFunctions(&M);
         return false;
     }
+
     /**
      * Return false if this function was explicitly annoted to passed over
      */
@@ -95,7 +99,9 @@ namespace GLitchPlease {
                     StringRef annotation = dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())->getAsCString();
                     if(annotation.compare(AnnotationString)==0){
                         annotFuncs.insert(FUNC);
-                        errs() << "Found annotated function " << FUNC->getName()<<"\n";
+                        if(Verbose) {
+                          dbgs() << "Found annotated function " << FUNC->getName()<<"\n";
+                        }
                     }
                 }
             }
@@ -162,25 +168,17 @@ namespace GLitchPlease {
 
 
     bool runOnFunction(Function &F) override {
+      // Should we instrument this function?
       if(shouldInstrumentFunc(F)==false) {
             return false;
       }
 
+      // Place a call to our delay function at the end of every basic block in the function
       bool edited = false;
-      errs() << "I saw a function called " << F.getName() << "!\n";
+      errs() << "\033[1;31m[GR/Timing]\033[0m Instrumenting: " << F.getName() << "!\n";
       if(isFunctionSafeToModify(&F)) {
         for (auto &bb: F) {
-          errs() << "I saw a bb called " << bb.getName() << "!\n";
           insertDelay(&bb.back(), false);
-          // for (auto &instr: bb) {
-            
-          //   // this is the current instruction.
-          //   Instruction *currInstr = &instr;
-          //   bool after;
-          //   if(canInsertDelay(currInstr, after)) {
-          //     insertDelay(currInstr, after);
-          //   }
-          // }
         }
       }
 
