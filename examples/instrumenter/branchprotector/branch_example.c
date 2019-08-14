@@ -11,6 +11,9 @@ int main() {
 		} else {
 			printf("dunno\n");
 		}
+		if (rand()%5 == 0) {
+			printf("random!");
+		}
 	}
 	return 0;
 }

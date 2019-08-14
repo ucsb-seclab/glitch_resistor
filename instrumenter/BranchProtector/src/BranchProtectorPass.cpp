@@ -35,10 +35,10 @@ namespace GLitchPlease
 
 static cl::OptionCategory GPOptions("branchprotectorpass options");
 
-cl::opt<bool> Verbose("verbose",
-                      cl::desc("Print verbose information"),
-                      cl::init(false),
-                      cl::cat(GPOptions));
+// cl::opt<bool> Verbose("verbose",
+//                       cl::desc("Print verbose information"),
+//                       cl::init(false),
+//                       cl::cat(GPOptions));
 
 /***
    * The main pass.
@@ -124,16 +124,33 @@ public:
           if (annotation.compare(AnnotationString) == 0)
           {
             annotFuncs.insert(FUNC);
-            if (Verbose)
-            {
-              dbgs() << "Found annotated function " << FUNC->getName() << "\n";
-            }
+            // if (Verbose)
+            // {
+            //   dbgs() << "Found annotated function " << FUNC->getName() << "\n";
+            // }
           }
         }
       }
     }
   }
 
+  CmpInst *getCmpInst(Instruction &ins)
+  {
+    Instruction *prevInst = ins.getPrevNonDebugInstruction();
+    while (!isa<CmpInst>(prevInst) && prevInst != NULL)
+    {
+      dbgs() << TAG << *prevInst << "\n";
+      prevInst = prevInst->getPrevNonDebugInstruction();
+    }
+    if (prevInst == NULL)
+    {
+      return NULL;
+    }
+    else
+    {
+      return cast<CmpInst>(prevInst);
+    }
+  }
   /***
      * This function inserts a second complimentary branch instruction to be checked
      * @param targetInstr Point at which the call should be inserted.
@@ -155,9 +172,10 @@ public:
       dbgs() << TAG << "Instrumenting:" << targetInstr << "\n";
       // }
 
-      // Get our compare instruction
-      CmpInst *cmpInstruction = cast<CmpInst>(targetInstr.getPrevNonDebugInstruction());
+      // // Get our compare instruction
+      // CmpInst *cmpInstruction = getCmpInst(targetInstr);
 
+      // dbgs() << TAG << *cmpInstruction << "\n";
       // Create a new basic block for our redundant check
       BasicBlock *doubleCheck = BasicBlock::Create(targetInstr.getContext(), "doubleCheck");
       BasicBlock *failBlock = BasicBlock::Create(targetInstr.getContext(), "failBlock");
@@ -181,10 +199,10 @@ public:
       // TODO: Do some manipulation to the value and change the comparison
 
       // New comparison and branch (going to detection function if it fails)
-      Value *cmpCond = builder.CreateICmp(cmpInstruction->getPredicate(),
-                                          cmpInstruction->getOperand(0),
-                                          cmpInstruction->getOperand(1));
-      Instruction *branchNew = builder.CreateCondBr(cmpCond,
+      // Value *cmpCond = builder.CreateICmp(cmpInstruction->getPredicate(),
+      //                                     cmpInstruction->getOperand(0),
+      //                                     cmpInstruction->getOperand(1));
+      Instruction *branchNew = builder.CreateCondBr(targetInstr.getCondition(),
                                                     trueBB,
                                                     failBlock);
 
@@ -245,18 +263,21 @@ public:
 
     if (isFunctionSafeToModify(&F))
     {
+      // errs() << TAG << F << "\n";
       for (auto &bb : F)
       {
+        // errs() << TAG << bb << "\n";
         for (auto &ins : bb)
         {
+          // errs() << TAG << ins << "\n";
           if (isa<BranchInst>(ins))
           {
             if (isInsertedBranch(ins))
             {
-              if (Verbose)
-              {
-                dbgs() << TAG << "Skipping branch, it's one we inserted.\n";
-              }
+              // if (Verbose)
+              // {
+              //   dbgs() << TAG << "Skipping branch, it's one we inserted.\n";
+              // }
               continue;
             }
             insertBranch2(cast<BranchInst>(ins));
