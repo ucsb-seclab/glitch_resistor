@@ -134,22 +134,105 @@ public:
     }
   }
 
-  CmpInst *getCmpInst(Instruction &ins)
-  {
-    Instruction *prevInst = ins.getPrevNonDebugInstruction();
-    while (!isa<CmpInst>(prevInst) && prevInst != NULL)
-    {
-      dbgs() << TAG << *prevInst << "\n";
-      prevInst = prevInst->getPrevNonDebugInstruction();
+  /***
+   * This function checks if the provided instruction can be replicated.
+   * @param currIn Instruction to be checked.
+   * @return true if can be replicate else false.
+   */
+  bool canReplicate(Instruction *currIn) {
+    // it should not be a call or a load or constant instruction.
+    return !(dyn_cast<CallInst>(currIn) || dyn_cast<Constant>(currIn));
+  }
+
+  /***
+   * This function checked if the operands ofb the provided instruction
+   * can be replicated.
+   * @param currIn Instruction to check.
+   * @return true if the operands can be replicated.
+   */
+  bool canReplicateOperands(Instruction *currIn) {
+    // it should not be a call or a load or constant instruction.
+    return !(dyn_cast<CallInst>(currIn) || dyn_cast<LoadInst>(currIn) || dyn_cast<Constant>(currIn));
+  }
+
+  /***
+   *  This function gets all the non-memory instructions that needed to replicate
+   *  to replicate the provided instruction.
+   * @param currInstr Instruction that needed to replicate.
+   * @param allInstrs list of instructions that needed to replicate.
+   * @return true if there are any instructions that needed to replicate.
+   */
+  bool recursivelyGetInstructionsToReplicate(Instruction *currInstr, std::vector<Instruction*> &allInstrs) {
+    bool hasInstrInserted = false;
+    if (currInstr != nullptr) {
+      // check if the current instruction is already visited?
+      if (std::find(allInstrs.begin(), allInstrs.end(), currInstr) == allInstrs.end()) {
+        allInstrs.insert(allInstrs.begin(), currInstr);
+        hasInstrInserted = true;
+        if (canReplicateOperands(currInstr)) {
+          assert(dyn_cast<StoreInst>(currInstr) == nullptr && "We cannot have store instruction as an operand.");
+          for (unsigned i = 0; i < currInstr->getNumOperands(); i++) {
+            Value *currOp = currInstr->getOperand(i);
+            if (Instruction *CI = dyn_cast<Instruction>(currOp)) {
+              if(canReplicate(CI)) {
+                hasInstrInserted = recursivelyGetInstructionsToReplicate(CI, allInstrs) || hasInstrInserted;
+              }
+            }
+          }
+        }
+      }
     }
-    if (prevInst == NULL)
-    {
-      return NULL;
+    return hasInstrInserted;
+  }
+
+  /***
+   * For a given branch instruction to be replicated,
+   * this function gets all the instructions that need to be
+   * replicated to faithfully replicate the provided branch instruction.
+   *
+   * @param targetInstr Target branch instruction to replicate.
+   * @param allInstrs List of all instructions that need to be replicated.
+   * @return true if one or more instructions need to be replicated.
+   */
+  bool getAllInstrToReplicate(BranchInst &targetInstr, std::vector<Instruction*> &allInstrs) {
+    assert(targetInstr.isConditional() && "This has to be conditional.");
+    if(Instruction *CI = dyn_cast<Instruction>(targetInstr.getCondition())) {
+      return recursivelyGetInstructionsToReplicate(CI, allInstrs);
     }
-    else
-    {
-      return cast<CmpInst>(prevInst);
+    return false;
+  }
+
+  /***
+   * Duplicate all the instructions at the provided insertion point.
+   * @param builder point at which the instruction needs to be inserted.
+   * @param targetBrInst Branch instruction because of which the replication should be done.
+   * @param allInstrs vector of all the instructions that needed to be replicated.
+   * @return true if the insertion is successful.
+   */
+  bool duplicateInstructions(IRBuilder<> &builder, BranchInst &targetBrInst, std::vector<Instruction*> &allInstrs) {
+    std::map<Instruction*, Instruction*> replicatedInstrs;
+    for(auto currIn: allInstrs) {
+      Instruction *newInstr = currIn->clone();
+      builder.Insert(newInstr);
+      replicatedInstrs[currIn] = newInstr;
+      for (unsigned i = 0; i < newInstr->getNumOperands(); i++) {
+        Value *currOp = newInstr->getOperand(i);
+        if (Instruction *opInstr = dyn_cast<Instruction>(currOp)) {
+          if(replicatedInstrs.find(opInstr) != replicatedInstrs.end()) {
+            newInstr->replaceUsesOfWith(currOp, replicatedInstrs[opInstr]);
+          }
+        }
+      }
     }
+    // Okay, now that we replicated all the instructions.
+    // change the condition of the branch instruction to refer to the newly inserted instruction.
+    if(Instruction *CI = dyn_cast<Instruction>(targetBrInst.getCondition())) {
+      if(replicatedInstrs.find(CI) != replicatedInstrs.end()) {
+        targetBrInst.replaceUsesOfWith(targetBrInst.getCondition(), replicatedInstrs[CI]);
+      }
+    }
+
+    return true;
   }
   /***
      * This function inserts a second complimentary branch instruction to be checked
@@ -167,17 +250,16 @@ public:
       {
         return false;
       }
+
       // if (Verbose)
       // {
       dbgs() << TAG << "Instrumenting:" << targetInstr << "\n";
       // }
       BasicBlock *targetBB = targetInstr.getParent();
-      // // Get our compare instruction
-      // CmpInst *cmpInstruction = getCmpInst(targetInstr);
 
-      // dbgs() << TAG << *cmpInstruction << "\n";
       // Create a new basic block for our redundant check
       BasicBlock *doubleCheck = BasicBlock::Create(targetInstr.getContext(), "doubleCheck");
+      // create a failure block
       BasicBlock *failBlock = BasicBlock::Create(targetInstr.getContext(), "failBlock");
 
       // Get the basicblock of the true branch
@@ -186,6 +268,7 @@ public:
       // that refer to targetBB with fallThroughBB
       BasicBlock *fallthroughBB = BasicBlock::Create(targetInstr.getContext(), "fallThrough");
       IRBuilder<> builder(fallthroughBB);
+      // connect fallthrough to the true BB
       builder.CreateBr(trueBB);
 
       // Insert our new BBs into the function
@@ -199,18 +282,18 @@ public:
       // Get the detection function
       Function *targetFunction = this->getDelayFunction(*targetInstr.getModule());
 
-      // Construct our redudant check and call to detection function
+      // Construct our redundant check and call to detection function
       builder.SetInsertPoint(doubleCheck);
 
-      // TODO: Do some manipulation to the value and change the comparison
-
-      // New comparison and branch (going to detection function if it fails)
-      // Value *cmpCond = builder.CreateICmp(cmpInstruction->getPredicate(),
-      //                                     cmpInstruction->getOperand(0),
-      //                                     cmpInstruction->getOperand(1));
       Instruction *branchNew = builder.CreateCondBr(targetInstr.getCondition(),
                                                     fallthroughBB,
                                                     failBlock);
+      // replicate the comparision activity
+      std::vector<Instruction*> instrsToReplicate;
+      instrsToReplicate.clear();
+      getAllInstrToReplicate(targetInstr, instrsToReplicate);
+      builder.SetInsertPoint(branchNew);
+      duplicateInstructions(builder, *(dyn_cast<BranchInst>(branchNew)), instrsToReplicate);
 
       // Keep track of the branches that we created so that we don't analyze them again later.
       insertedBranches.insert(branchNew);
