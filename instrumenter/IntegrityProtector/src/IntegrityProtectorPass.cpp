@@ -3,23 +3,16 @@
 //
 
 #include <llvm/Pass.h>
-#include <llvm/IR/Function.h>
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/IR/LegacyPassManager.h>
-#include <llvm/Transforms/IPO/PassManagerBuilder.h>
-#include <llvm/IR/Instructions.h>
 #include <llvm/IR/ValueSymbolTable.h>
-#include <iostream>
-#include <llvm/Analysis/CallGraph.h>
 #include <llvm/Analysis/LoopInfo.h>
-#include <llvm/Support/Debug.h>
-#include <llvm/Analysis/CFGPrinter.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
+#include <llvm/Analysis/GlobalsModRef.h>
 #include <set>
+#include "ProtectedDataHelper.h"
+#include "FunctionFetcherHelper.h"
+#include "IntegrityCodeInserter.h"
 
 
 using namespace llvm;
@@ -50,13 +43,22 @@ namespace GLitchPlease {
 
     bool runOnModule(Module &m) override {
       bool edited = false;
-      // identify all the variables to be protected.
+      // TODO: change this to read from user
+      std::set<std::string> toProtectVars = {"gpprotect_struc", "gpprotect_arr"};
+      ProtectedDataHandler pDH(m, toProtectVars);
+      FunctionFetcherHelper ffH(m);
+      IntegrityCodeInserter integrityProtect(m, ffH);
 
-      // create shadow variables for each of them.
-
-      // instrument each of the access of the secret variables.
-
+      // identify and create shadow variabbles all the variables to be protected.
+      for(auto &currDataPair: pDH.getShadowDataMap()) {
+        edited = integrityProtect.protectData(currDataPair.first, currDataPair.second) || edited;
+      }
       return edited;
+    }
+
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
+      // may be to check for non-address taken stuff for global variables.
+      AU.addRequired<GlobalsAAWrapperPass>();
     }
 
   };

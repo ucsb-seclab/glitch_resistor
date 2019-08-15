@@ -18,7 +18,10 @@ namespace GLitchPlease {
 
   class ProtectedDataHandler {
   public:
-    ProtectedDataHandler(Module &M) : m(M) { }
+    ProtectedDataHandler(Module &M, std::set<std::string> &protGlob) : m(M), toProtectGlobVarNames(protGlob) {
+      this->toProtectDataVars.clear();
+      this->shadowDataVars.clear();
+    }
     /***
      *
      * @return
@@ -38,16 +41,14 @@ namespace GLitchPlease {
      */
     bool isAddressTaken(Value *toCheckValue);
     Module &m;
+    // names of the global variables that need to be protected.
+    std::set<std::string> &toProtectGlobVarNames;
+    // set of the global variables that needs to be protected.
+    std::set<Value*> toProtectDataVars;
+    // map containing the global variables and corresponding shadow variables
+    // that needs to be protected.
+    std::map<Value*, Value*> shadowDataVars;
 
-  };
-
-  class IntegrityCheckInserter {
-  public:
-    IntegrityCheckInserter(Module &M): m(M) {}
-
-    bool protectAccess(Value *original, Value *integrity);
-  private:
-    Module &m;
   };
 }
 

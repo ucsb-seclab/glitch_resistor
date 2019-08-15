@@ -20,6 +20,7 @@ namespace GLitchPlease {
    *
    */
   class IntegrityCodeInserter {
+  public:
     IntegrityCodeInserter(Module &M, FunctionFetcherHelper &ff): m(M), fetchHelper(ff) { }
 
     /***
