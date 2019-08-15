@@ -171,7 +171,7 @@ public:
       // {
       dbgs() << TAG << "Instrumenting:" << targetInstr << "\n";
       // }
-
+      BasicBlock *targetBB = targetInstr.getParent();
       // // Get our compare instruction
       // CmpInst *cmpInstruction = getCmpInst(targetInstr);
 
@@ -182,10 +182,16 @@ public:
 
       // Get the basicblock of the true branch
       auto trueBB = targetInstr.getSuccessor(0);
+      // we create a fall through BB so that we can update all the BBs
+      // that refer to targetBB with fallThroughBB
+      BasicBlock *fallthroughBB = BasicBlock::Create(targetInstr.getContext(), "fallThrough");
+      IRBuilder<> builder(fallthroughBB);
+      builder.CreateBr(trueBB);
 
       // Insert our new BBs into the function
-      doubleCheck->insertInto(targetInstr.getFunction(), trueBB);
-      failBlock->insertInto(targetInstr.getFunction(), doubleCheck);
+      fallthroughBB->insertInto(targetInstr.getFunction(), trueBB);
+      doubleCheck->insertInto(targetInstr.getFunction(), fallthroughBB);
+      failBlock->insertInto(targetInstr.getFunction(), fallthroughBB);
 
       // Update true branch to be doubleCheck
       targetInstr.setSuccessor(0, doubleCheck);
@@ -194,7 +200,7 @@ public:
       Function *targetFunction = this->getDelayFunction(*targetInstr.getModule());
 
       // Construct our redudant check and call to detection function
-      IRBuilder<> builder(doubleCheck);
+      builder.SetInsertPoint(doubleCheck);
 
       // TODO: Do some manipulation to the value and change the comparison
 
@@ -203,7 +209,7 @@ public:
       //                                     cmpInstruction->getOperand(0),
       //                                     cmpInstruction->getOperand(1));
       Instruction *branchNew = builder.CreateCondBr(targetInstr.getCondition(),
-                                                    trueBB,
+                                                    fallthroughBB,
                                                     failBlock);
 
       // Keep track of the branches that we created so that we don't analyze them again later.
@@ -212,7 +218,21 @@ public:
       // Make our failure case call the glitch detected function
       builder.SetInsertPoint(failBlock);
       Instruction *callDetected = builder.CreateCall(targetFunction);
-      builder.CreateBr(trueBB); // so that the CFG is still complete
+      builder.CreateBr(fallthroughBB); // so that the CFG is still complete
+
+      // Now what we should do is in the trueBB.
+      // replace all the PHIs that ref targetBB with fallThroughBB
+      for(auto &currInstr: *trueBB) {
+        Instruction *currInstrPtr = &currInstr;
+        if(PHINode *phiInstr = dyn_cast<PHINode>(currInstrPtr)) {
+          int bbIndx = phiInstr->getBasicBlockIndex(targetBB);
+          if(bbIndx >=0 ) {
+            Value *targetValue = phiInstr->getIncomingValue(bbIndx);
+            phiInstr->removeIncomingValue(bbIndx);
+            phiInstr->addIncoming(targetValue, fallthroughBB);
+          }
+        }
+      }
     }
     catch (const std::exception &e)
     {
