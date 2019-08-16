@@ -25,17 +25,17 @@ using namespace llvm;
 
 #define DELAY_FUNC_NAME "gpdelay"
 
-namespace GLitchPlease {
+namespace GLitchPlease
+{
 
+static cl::OptionCategory GPOptions("delayinjectorpass options");
 
-  static cl::OptionCategory GPOptions("delayinjectorpass options");
+cl::opt<bool> Verbose("verbose",
+                      cl::desc("Print verbose information"),
+                      cl::init(false),
+                      cl::cat(GPOptions));
 
-  cl::opt<bool> Verbose("verbose",
-                        cl::desc("Print verbose information"),
-                        cl::init(false),
-                        cl::cat(GPOptions));
-
-  /***
+/***
    * The main pass.
    */
   struct DelayInjectorPass : public FunctionPass {
@@ -60,7 +60,12 @@ namespace GLitchPlease {
       }
       return this->delayFunction;
     }
+    return this->delayFunction;
+  }
 
+  ~DelayInjectorPass()
+  {
+  }
 
     ~DelayInjectorPass() {
     }
@@ -114,43 +119,49 @@ namespace GLitchPlease {
      * @param insertAfter flag to indicate that call should be inserted after the instruction.
      * @return true if insertion is succesful else false
      */
-    bool insertDelay(Instruction *targetInstr, bool insertAfter = false) {
-      bool retVal = true;
+  bool insertDelay(Instruction *targetInstr, bool insertAfter = false)
+  {
+    bool retVal = true;
 
-      try {
-        if(Verbose) {
-          dbgs() << "Instrumenting:" << *targetInstr << "\n";
-        }
-        // set the insertion point to be after the load instruction.
-        auto targetInsertPoint = targetInstr->getIterator();
-        if(insertAfter) {
-          targetInsertPoint++;
-        }
-        IRBuilder<> builder(&(*targetInsertPoint));
-
-        // get the log function
-        Function *targetFunction = this->getDelayFunction(*targetInstr->getModule());
-
-        // create call.
-        builder.CreateCall(targetFunction);
-      } catch (const std::exception &e) {
-        dbgs() << "[?] Error occurred while trying to instrument instruction:" << e.what() << "\n";
-        retVal = false;
+    try
+    {
+      if (Verbose)
+      {
+        dbgs() << "Instrumenting:" << *targetInstr << "\n";
       }
-      return retVal;
-    }
+      // set the insertion point to be after the load instruction.
+      auto targetInsertPoint = targetInstr->getIterator();
+      if (insertAfter)
+      {
+        targetInsertPoint++;
+      }
+      IRBuilder<> builder(&(*targetInsertPoint));
 
-    /***
+      // get the log function
+      Function *targetFunction = this->getDelayFunction(*targetInstr->getModule());
+
+      // create call.
+      builder.CreateCall(targetFunction);
+    }
+    catch (const std::exception &e)
+    {
+      dbgs() << "[?] Error occurred while trying to instrument instruction:" << e.what() << "\n";
+      retVal = false;
+    }
+    return retVal;
+  }
+
+  /***
      * Check if the provided function is safe to modify.
      * @param currF Function to check.
      * @return flag that indicates if we can modify the current function or not.
      */
-    bool isFunctionSafeToModify(const Function *currF) {
-      return !(!currF->isDeclaration() && currF->hasName() && currF->getName().equals(DELAY_FUNC_NAME));
-    }
+  bool isFunctionSafeToModify(const Function *currF)
+  {
+    return !(!currF->isDeclaration() && currF->hasName() && currF->getName().equals(DELAY_FUNC_NAME));
+  }
 
-
-    /***
+  /***
      * The function is the insertion oracle. This returns true
      * if delay has to be inserted at (before or after) the instruction.
      * @param currInstr Insruction before which the delay has to be inserted.
@@ -181,8 +192,6 @@ namespace GLitchPlease {
           insertDelay(&bb.back(), false);
         }
       }
-
-      return edited;
     }
 
   };
