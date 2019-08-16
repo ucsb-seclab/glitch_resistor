@@ -50,9 +50,18 @@ std::map<Value*, Value*>& ProtectedDataHandler::getShadowDataMap() {
                           newGVarName << " to protect:" <<
                           gVar->getName().str() << "\n";
         }
-        // set the section name.
+
         GlobalVariable *newGlobVar = dyn_cast<GlobalVariable>(newIntegrityVal);
-        newGlobVar->setSection(GPINTEGRITYSECTIONNAME);
+        // set the linkage
+        newGlobVar->setLinkage(gVar->getLinkage());
+        // initialize this..only if we have initialize for
+        // the source global variable.
+        if(gVar->hasInitializer()) {
+          // set the section name.
+          newGlobVar->setSection(GPINTEGRITYSECTIONNAME);
+          // initialize it to zeros.
+          newGlobVar->setInitializer(ConstantAggregateZero::get(gVar->getType()->getPointerElementType()));
+        }
         shadowDataVars[currDVar] = newIntegrityVal;
       } else {
         llvm::errs() << "[-] Cannot handle non-global value:" << *currDVar << "\n";

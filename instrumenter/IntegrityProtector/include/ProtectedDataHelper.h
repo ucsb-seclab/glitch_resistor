@@ -16,6 +16,11 @@ using namespace llvm;
 namespace GLitchPlease {
   extern cl::opt<bool> Verbose;
 
+  /***
+   *  This class handles looking up data values that need to be protected.
+   *  This also creates duplicate variables, that store the integrity value
+   *  for the corresponding original global variable.
+   */
   class ProtectedDataHandler {
   public:
     ProtectedDataHandler(Module &M, std::set<std::string> &protGlob) : m(M), toProtectGlobVarNames(protGlob) {
@@ -23,21 +28,23 @@ namespace GLitchPlease {
       this->shadowDataVars.clear();
     }
     /***
-     *
-     * @return
+     * Get the set of the values that need to be protected.
+     * @return Set of values that need to be protected.
      */
     std::set<Value*>& getToProtectDataElements();
 
     /***
-     *
-     * @return
+     *  Get the map of values to protect and the corresponding values that
+     *  has the integrity value for the corresponding data.
+     * @return Map of data values and corresponding integrity values.
      */
     std::map<Value*, Value*>& getShadowDataMap();
   private:
     /***
-     *
-     * @param toCheckValue
-     * @return
+     * Check if the provided value has its address taken
+     * i.e., the address of it is stored somewhere.
+     * @param toCheckValue The value which should be checked.
+     * @return true if taken else false
      */
     bool isAddressTaken(Value *toCheckValue);
     Module &m;

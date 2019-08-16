@@ -116,12 +116,12 @@ Function *FunctionFetcherHelper::getWriteFunction(void) {
 bool FunctionFetcherHelper::isFunctionSafeToModify(const Function *currF) {
 
   // we should not modify these functions.
-  // because these are our intrumenter functions.
+  // because these are our instrumenter functions.
   std::set<std::string> instrumenterFunctions = {INTEREADFUNCNAME, INTREADHELPERFUNCNAME,
                                                  CHARREADHELPERFUNCNAME, PTRREADHELPERFUNCNAME,
                                                  INTEWRITEFUNCNAME};
   if(!currF->isDeclaration()) {
-    std::string funcName = "";
+    std::string funcName;
     if(currF->hasName()) {
       funcName = currF->getName();
       return instrumenterFunctions.find(funcName) == instrumenterFunctions.end();

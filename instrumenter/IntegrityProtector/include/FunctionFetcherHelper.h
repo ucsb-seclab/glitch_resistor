@@ -13,7 +13,8 @@ using namespace llvm;
 
 namespace GLitchPlease {
   /***
-   *
+   * This is a helper class that identifies read and write
+   * helper functions.
    */
   class FunctionFetcherHelper {
   public:
@@ -26,28 +27,31 @@ namespace GLitchPlease {
     }
 
     /***
-     *
-     * @return
+     *  Get the pointer to Raw read function.
+     * @return Pointer to the function used to read raw value.
      */
     Function *getReadFunction(void);
 
     /***
-     *
-     * @param targetType
-     * @return
+     * Get the pointer to the helper function that reads the data
+     * corresponding to the provided type.
+     * @param targetType Type of the data to read.
+     * @return Pointer to the read helper function.
      */
     Function* getReadHelperFunction(Type *targetType);
 
     /***
-     *
-     * @param targetType
-     * @return
+     * Similar to the read helper function, this is the write counterpart.
+     * It fetches a pointer to the function that writes data corresponding
+     * to the provided type.
+     * @param targetType Type of the data to write.
+     * @return Pointer to the write helper function.
      */
     Function* getWriteHelperFunction(Type *targetType);
 
     /***
-     *
-     * @return
+     * Get the pointer to Raw write function.
+     * @return Pointer to the function used to write raw value.
      */
     Function *getWriteFunction(void);
 

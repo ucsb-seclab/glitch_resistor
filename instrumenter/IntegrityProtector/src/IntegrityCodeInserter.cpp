@@ -20,13 +20,35 @@ bool IntegrityCodeInserter::protectData(Value *src, Value *srcInt) {
   return false;
 }
 
+bool IntegrityCodeInserter::canReplicateUsingReplacement(Value *currValue) {
+  return dyn_cast<GetElementPtrInst>(currValue) || dyn_cast<CastInst>(currValue) || dyn_cast<PHINode>(currValue);
+}
+
 bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value *srcIntInstr) {
   // get usages of srcInstr.
-  for(auto U : srcInstr->users()){
-    // if it is used in a GetElementPtr?..then insert similar getelementptr instruction
-    // and try to use the replicated instruction.
-    if (auto srcGEP = dyn_cast<GetElementPtrInst>(U)){
-      // first prepare operands to insert a new GEP instruction.
+  for(auto U : srcInstr->users()) {
+    // Can this instruction be replicated using our default method?
+    if (canReplicateUsingReplacement(U)) {
+      // next set up the insertion point to be right after the original instruction.
+      Instruction *targetInstr = dyn_cast<Instruction>(U);
+      auto targetInsertPoint = targetInstr->getIterator();
+      targetInsertPoint++;
+      IRBuilder<> builder(&(*targetInsertPoint));
+      std::string newValueName = targetInstr->getValueName()->first().str() + "_gpint";
+      // clone the original instruction.
+      Instruction *newInstr = targetInstr->clone();
+      // replace the uses in the cloned instruction with the new instruction.
+      newInstr->replaceUsesOfWith(srcInstr, srcIntInstr);
+      // insert the cloned instruction into its new position.
+      builder.Insert(newInstr, newValueName);
+      // start propagating the cloned instruction.
+      this->replicateAndIntegrityProtect(targetInstr, newInstr);
+      continue;
+    }
+
+    if (auto srcGEP = dyn_cast<GEPOperator>(U)) {
+      // this a GEP operator i.e., an inline GEP instruction.
+      // get the operands and the pointer.
       std::vector<Value*> arrIdxVals;
       arrIdxVals.clear();
       bool pointerOpFound = false;
@@ -44,15 +66,23 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
         llvm::errs() << "[-] Unable to handle GEP instruction:" << *srcGEP << "\n";
       }
       assert(pointerOpFound && "Expected a GEP instruction to find a pointer but did not find one.");
+      Instruction *targetSrcIntr = nullptr;
+
+      for(auto U : srcGEP->users()) {
+        if (auto I = dyn_cast<Instruction>(U)) {
+          targetSrcIntr = I;
+          break;
+        }
+      }
 
       // next set up the insertion point to be right after the original instruction.
-      auto targetInsertPoint = srcGEP->getIterator();
+      auto targetInsertPoint = targetSrcIntr->getIterator();
       targetInsertPoint++;
       IRBuilder<> builder(&(*targetInsertPoint));
 
-      std::string newValueName = srcGEP->getValueName()->first().str() + "_gpint";
+      std::string newValueName = "tmp_st_gpint";
 
-      Value *newGEPInstr = builder.CreateGEP(srcGEP->getType(), srcIntInstr, arrIdxVals, newValueName);
+      Value *newGEPInstr = builder.CreateGEP(srcIntInstr, arrIdxVals, newValueName);
       // now start using the new GEP instruction.
       this->replicateAndIntegrityProtect(srcGEP, newGEPInstr);
       continue;
@@ -72,9 +102,9 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
       IRBuilder<> builder(&(*targetInsertPoint));
 
       Value *srcIntBC = builder.CreatePointerCast(srcIntInstr,
-                                                  Type::getInt8PtrTy(m.getContext()), srcLoad->getValueName()->first().str() + "_loadgpicast");
+                                                  Type::getInt8PtrTy(m.getContext()), "loadgpicast");
       Value *srcBC = builder.CreatePointerCast(srcInstr,
-                                               Type::getInt8PtrTy(m.getContext()), srcLoad->getValueName()->first().str() + "_loadgpocast");
+                                               Type::getInt8PtrTy(m.getContext()), "loadgpocast");
 
       // Insert a call to the integrity checking function.
       Value *arguments[] = {srcBC, srcIntBC};
@@ -85,8 +115,12 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
         newVal = builder.CreatePointerCast(newVal, srcLoad->getType(), "gpConToOrPtr");
       }
 
-      // replace the original instruction with the new function call.
-      srcLoad->replaceUsesOfWith(srcLoad, newVal);
+      for(auto loadUse : srcLoad->users()) {
+        loadUse->replaceUsesOfWith(srcLoad, newVal);
+      }
+
+      srcLoad->eraseFromParent();
+
       // NO need to propagate this information, because we replaced all the instructions
       // that use the load with the result of the integrity load call.
       continue;
@@ -104,14 +138,14 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
       // Are we storing a pointer? then convert into void*
       if(toStoreValue->getType()->isPointerTy()) {
         toStoreValue = builder.CreatePointerCast(toStoreValue,
-                                                 Type::getInt8PtrTy(m.getContext()), toStoreValue->getValueName()->first().str() + "_storegpocast");
+                                                 Type::getInt8PtrTy(m.getContext()), "storegpocast");
       }
 
       // convert the pointers into void*
       Value *srcIntBC = builder.CreatePointerCast(srcIntInstr,
-                                                  Type::getInt8PtrTy(m.getContext()), srcStore->getValueName()->first().str() + "_storegpicast");
+                                                  Type::getInt8PtrTy(m.getContext()), "storegpicast");
       Value *srcBC = builder.CreatePointerCast(srcInstr,
-                                               Type::getInt8PtrTy(m.getContext()), srcStore->getValueName()->first().str() + "_storegpocast");
+                                               Type::getInt8PtrTy(m.getContext()), "storegpocast");
 
       // Insert a call to the integrity checking write function.
       Value *arguments[] = {srcBC, srcIntBC, toStoreValue};
@@ -123,6 +157,12 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
       srcStore->eraseFromParent();
       // Similar to the load, no need to propagate this information.
       continue;
+    }
+
+    if(Instruction *UI = dyn_cast<Instruction>(U)) {
+      llvm::errs() << "[-] Do not know how to handle the instruction:" << *UI << "\n";
+    } else {
+      llvm::errs() << "[-] Not an instruction:" << *U << "\n";
     }
 
     llvm::errs() << "[-] Invalid instruction type detected:" << *U << "\n";

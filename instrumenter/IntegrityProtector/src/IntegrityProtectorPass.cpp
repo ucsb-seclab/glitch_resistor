@@ -10,6 +10,8 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Analysis/GlobalsModRef.h>
 #include <set>
+#include <fstream>
+
 #include "ProtectedDataHelper.h"
 #include "FunctionFetcherHelper.h"
 #include "IntegrityCodeInserter.h"
@@ -27,6 +29,21 @@ namespace GLitchPlease {
                         cl::init(false),
                         cl::cat(GPOptions));
 
+  cl::opt<std::string> GlobalsFile("globals",
+                                   cl::desc("Path to the file containing global variable that need to be protected."),
+                                   cl::init("to_protect_globals.txt"),
+                                   cl::cat(GPOptions));
+
+  bool readFileLines(std::string fileName, std::set<std::string> &allLines) {
+    bool toRet = false;
+    std::ifstream infile(fileName);
+    std::string line;
+    while (std::getline(infile, line)) {
+      toRet = allLines.insert(line).second || toRet;
+    }
+    return toRet;
+  }
+
   /***
    * The main pass.
    */
@@ -43,13 +60,18 @@ namespace GLitchPlease {
 
     bool runOnModule(Module &m) override {
       bool edited = false;
-      // TODO: change this to read from user
-      std::set<std::string> toProtectVars = {"gpprotect_struc", "gpprotect_arr"};
+      // read teh global variables to be protected.
+      std::set<std::string> toProtectVars;
+      if(!readFileLines(GlobalsFile, toProtectVars)) {
+        llvm::errs() << "[-] Unable to read globals to protect from the file:" << GlobalsFile << "\n";
+        llvm::errs() << "[-] Cannot perform integrity protection. Quitting.\n";
+        return edited;
+      }
       ProtectedDataHandler pDH(m, toProtectVars);
       FunctionFetcherHelper ffH(m);
       IntegrityCodeInserter integrityProtect(m, ffH);
 
-      // identify and create shadow variabbles all the variables to be protected.
+      // identify and create shadow variables for all the variables to be protected.
       for(auto &currDataPair: pDH.getShadowDataMap()) {
         edited = integrityProtect.protectData(currDataPair.first, currDataPair.second) || edited;
       }
