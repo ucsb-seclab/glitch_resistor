@@ -19,7 +19,7 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
-
+#include <set>
 
 using namespace llvm;
 
@@ -38,12 +38,14 @@ namespace GLitchPlease {
   /***
    * The main pass.
    */
-  struct DelayInjectorPass : public ModulePass {
+  struct DelayInjectorPass : public FunctionPass {
   public:
     static char ID;
     Function *delayFunction;
+    std::set<Function*> annotFuncs;
+    std::string AnnotationString = "NoResistor";
 
-    DelayInjectorPass() : ModulePass(ID) {
+    DelayInjectorPass() : FunctionPass(ID) {
       this->delayFunction = nullptr;
     }
 
@@ -61,6 +63,49 @@ namespace GLitchPlease {
 
 
     ~DelayInjectorPass() {
+    }
+
+
+    /**
+     * Initialize our annotated functions set
+     */
+    virtual bool doInitialization(Module &M)override{
+        getAnnotatedFunctions(&M);
+        return false;
+    }
+
+    /**
+     * Return false if this function was explicitly annoted to passed over
+     */
+    bool shouldInstrumentFunc(Function &F){
+        return annotFuncs.find(&F)==annotFuncs.end();
+    }
+
+    /** 
+     * Get a list of all of the annotated functions
+     */
+    void getAnnotatedFunctions(Module *M){
+        for (Module::global_iterator I = M->global_begin(),
+                E = M->global_end();
+                I != E;
+                ++I) {
+
+            if (I->getName() == "llvm.global.annotations") {
+                ConstantArray *CA = dyn_cast<ConstantArray>(I->getOperand(0));
+                for(auto OI = CA->op_begin(); OI != CA->op_end(); ++OI){
+                    ConstantStruct *CS = dyn_cast<ConstantStruct>(OI->get());
+                    Function *FUNC = dyn_cast<Function>(CS->getOperand(0)->getOperand(0));
+                    GlobalVariable *AnnotationGL = dyn_cast<GlobalVariable>(CS->getOperand(1)->getOperand(0));
+                    StringRef annotation = dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())->getAsCString();
+                    if(annotation.compare(AnnotationString)==0){
+                        annotFuncs.insert(FUNC);
+                        if(Verbose) {
+                          dbgs() << "Found annotated function " << FUNC->getName()<<"\n";
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /***
@@ -122,21 +167,18 @@ namespace GLitchPlease {
     }
 
 
-    bool runOnModule(Module &m) override {
+    bool runOnFunction(Function &F) override {
+      // Should we instrument this function?
+      if(shouldInstrumentFunc(F)==false) {
+            return false;
+      }
+
+      // Place a call to our delay function at the end of every basic block in the function
       bool edited = false;
-      //iterate through each function.
-      for(auto &currF: m) {
-        if(isFunctionSafeToModify(&currF)) {
-          for (auto &bb: currF) {
-            for (auto &instr: bb) {
-              // this is the current instruction.
-              Instruction *currInstr = &instr;
-              bool after;
-              if(canInsertDelay(currInstr, after)) {
-                insertDelay(currInstr, after);
-              }
-            }
-          }
+      errs() << "\033[1;31m[GR/Timing]\033[0m Instrumenting: " << F.getName() << "!\n";
+      if(isFunctionSafeToModify(&F)) {
+        for (auto &bb: F) {
+          insertDelay(&bb.back(), false);
         }
       }
 
@@ -152,4 +194,15 @@ namespace GLitchPlease {
                                             "inserting call to functions that cause random delays.",
                                             false,
                                             false);
+
+  // Pass loading stuff
+  // To use, run: clang -Xclang -load -Xclang <your-pass>.so <other-args> ...
+
+  // This function is of type PassManagerBuilder::ExtensionFn
+  static void loadPass(const PassManagerBuilder &Builder, llvm::legacy::PassManagerBase &PM) {
+    PM.add(new DelayInjectorPass());
+  }
+  // These constructors add our pass to a list of global extensions.
+  static RegisterStandardPasses clangtoolLoader_Ox(PassManagerBuilder::EP_OptimizerLast, loadPass);
+  static RegisterStandardPasses clangtoolLoader_O0(PassManagerBuilder::EP_EnabledOnOptLevel0, loadPass);
 }
