@@ -38,14 +38,14 @@ namespace GLitchPlease {
   /***
    * The main pass.
    */
-  struct RetProtectorPass : public FunctionPass {
+  struct RetProtectorPass : public ModulePass {
   public:
     static char ID;
     Function *delayFunction;
     std::set<Function*> annotFuncs;
     std::string AnnotationString = "NoResistor";
 
-    RetProtectorPass() : FunctionPass(ID) {
+    RetProtectorPass() : ModulePass(ID) {
       this->delayFunction = nullptr;
     }
 
@@ -64,7 +64,6 @@ namespace GLitchPlease {
 
     ~RetProtectorPass() {
     }
-
 
     /**
      * Initialize our annotated functions set
@@ -149,20 +148,29 @@ namespace GLitchPlease {
       return !(!currF->isDeclaration() && currF->hasName() && currF->getName().equals(DELAY_FUNC_NAME));
     }
 
-    bool runOnFunction(Function &F) override {
+    bool runOnModule(Module &M) override {
       // Should we instrument this function?
-      if(shouldInstrumentFunc(F)==false) {
-            return false;
-      }
+      //if(shouldInstrumentFunc(F)==false) {
+      //      return false;
+      //}
 
       // Place a call to our detection function after the return of every function
       bool edited = false;
       
-      if(isFunctionSafeToModify(&F)) {
-        errs() << "\033[1;31m[GR/Timing]\033[0m Instrumenting: " << F.getName() << "!\n";
-        auto &bb = F.getBasicBlockList().back();
-        insertProtector(&bb.back(), true);
-      }
+      //if(isFunctionSafeToModify(&F)) {
+        //errs() << "\033[1;31m[GR/Timing]\033[0m Instrumenting: " << F.getName() << "!\n";
+        //auto &bb = F.getBasicBlockList().back();
+        //insertProtector(&bb.back(), true);
+      
+        ConstantInt *zero = ConstantInt::getFalse(M.getContext());
+        for (User *U : zero->users()){
+            Instruction *inst = dyn_cast<Instruction>(U);
+            if(!inst){
+                errs() << "[RetPro -- Error] ConstantInt used by non-instruction: " << U << "\n";
+            }
+            dbgs() << "[RetPro -- Warning] Unknown instruction using ConstantInt::0: " << inst << "\n";
+        }
+      //}
 
       return edited;
     }
