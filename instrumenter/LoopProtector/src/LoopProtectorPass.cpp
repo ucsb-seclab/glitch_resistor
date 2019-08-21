@@ -22,6 +22,8 @@
 #include <set>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
+#include "Utils.h"
+
 using namespace llvm;
 
 #define GR_FUNC_NAME "gr_glitch_detected"
@@ -31,10 +33,10 @@ namespace GLitchPlease
 
 static cl::OptionCategory GPOptions("loopprotectorpass options");
 
-// cl::opt<bool> Verbose("verbose",
-//                       cl::desc("Print verbose information"),
-//                       cl::init(false),
-//                       cl::cat(GPOptions));
+cl::opt<bool> Verbose("verbose",
+                       cl::desc("Print verbose information"),
+                       cl::init(false),
+                       cl::cat(GPOptions));
 
 /***
    * The main pass.
@@ -141,6 +143,156 @@ public:
     AU.addRequired<LoopInfoWrapperPass>();
   }
 
+  /***
+   *
+   * @param F
+   * @return
+   */
+  Value* createNewLocalVariable(Function &F)
+  {
+    IRBuilder<> builder(&(*(F.getEntryBlock().getFirstInsertionPt())));
+    AllocaInst *newAlloca = builder.CreateAlloca(IntegerType::getInt32Ty(F.getContext()), nullptr, "GPLoopVar");
+    newAlloca->setAlignment(4);
+    return newAlloca;
+  }
+
+  bool getEnteringBBs(Loop* currLoop, std::set<BasicBlock*> &enteringBBs) {
+    BasicBlock *hdr = currLoop->getHeader();
+    for (auto it = pred_begin(hdr), et = pred_end(hdr); it != et; ++it) {
+      BasicBlock* predecessor = *it;
+      if(!currLoop->contains(predecessor)) {
+        enteringBBs.insert(predecessor);
+      }
+    }
+    return !enteringBBs.empty();
+  }
+
+  void storeValue(unsigned storeCons, Value *dstPtr, BasicBlock *dstBB) {
+    IRBuilder<> builder(&(*dstBB->getFirstInsertionPt()));
+    if(dstBB->getInstList().size() > 1) {
+      auto termIt = dstBB->getTerminator()->getIterator();
+      termIt--;
+      builder.SetInsertPoint(&(*termIt));
+    }
+    Value *cons = ConstantInt::get(IntegerType::getInt32Ty(dstBB->getContext()), storeCons);
+    builder.CreateStore(cons, dstPtr, true);
+  }
+
+  void resetValue(Value* loopVar, std::set<BasicBlock*> &targetBBs) {
+    // in each of the basic block..store 0
+    for(auto currBB: targetBBs) {
+      storeValue(0, loopVar, currBB);
+    }
+  }
+
+  /***
+   *
+   * @param lo
+   * @param co
+   * @return
+   */
+  bool getExitBBCorrespondence(Loop *lo, std::map<BasicBlock*, std::set<BasicBlock*>> &co) {
+    SmallVector<Loop::Edge, 32> exitEdges;
+    exitEdges.clear();
+    lo->getExitEdges(exitEdges);
+    for(auto &currEdge: exitEdges) {
+      BasicBlock *outBB = const_cast<BasicBlock*>(currEdge.second);
+      BasicBlock *inBB = const_cast<BasicBlock*>(currEdge.first);
+      co[outBB].insert(inBB);
+    }
+    return !co.empty();
+  }
+
+
+  BasicBlock* getLoopCheckFailedBB(Loop *LI) {
+    BasicBlock *loopCheckFailed = BasicBlock::Create(LI->getHeader()->getContext(), "loopCheckFail");
+    IRBuilder<> builder(loopCheckFailed);
+    // create a call to glitch detected function.
+    builder.CreateCall(getGRFunction(*(LI->getHeader()->getModule())));
+    SmallVector<BasicBlock*, 32> exitBBs;
+    exitBBs.clear();
+    LI->getExitBlocks(exitBBs);
+    builder.CreateBr(exitBBs[0]);
+    loopCheckFailed->insertInto(LI->getHeader()->getParent(), exitBBs[0]);
+    return loopCheckFailed;
+
+  }
+
+
+  bool protectLoopExits(std::map<BasicBlock*, std::set<BasicBlock*>> &exitBBCorrespondence,
+                        std::map<BasicBlock*, unsigned> &exitingBBCodes,
+                        Value *loopVariable) {
+
+    LLVMContext &C = loopVariable->getContext();
+    for(auto &exitBBCoL:exitBBCorrespondence) {
+      BasicBlock *exitingBB = exitBBCoL.first;
+      std::set<BasicBlock*> &inLoopBBs = exitBBCoL.second;
+
+      BasicBlock *exitFallThrough = BasicBlock::Create(exitingBB->getContext(), "exitFallThrough");
+      exitFallThrough->insertInto(exitingBB->getParent(), exitingBB);
+      IRBuilder<> builder(exitFallThrough);
+      builder.CreateBr(exitingBB);
+
+      Value* loopLoadVal = nullptr;
+      BasicBlock *firstCheck = nullptr;
+      BasicBlock *prevBB = nullptr;
+      Value *prevBBICmd = nullptr;
+
+      for(auto *inLoopBB: inLoopBBs) {
+        unsigned currNum = exitingBBCodes[inLoopBB];
+        BasicBlock *cmpBB = BasicBlock::Create(C, "checkVal");
+        cmpBB->insertInto(exitingBB->getParent(), exitFallThrough);
+        IRBuilder<> inCmdBuilder(cmpBB);
+        if(firstCheck == nullptr) {
+          loopLoadVal = inCmdBuilder.CreateLoad(loopVariable);
+          firstCheck = cmpBB;
+        }
+        assert(loopLoadVal != nullptr && "Load value cannot be null.");
+        Value *cons = ConstantInt::get(IntegerType::getInt32Ty(C), currNum);
+        Value *icmpEq = inCmdBuilder.CreateICmpEQ(loopLoadVal, cons);
+
+        if(prevBB != nullptr) {
+          inCmdBuilder.SetInsertPoint(prevBB);
+          inCmdBuilder.CreateCondBr(prevBBICmd, exitFallThrough, cmpBB);
+        }
+
+        prevBB = cmpBB;
+        prevBBICmd = icmpEq;
+      }
+
+      BasicBlock *terminatingBB = BasicBlock::Create(exitingBB->getContext(), "terminatingBB");
+      terminatingBB->insertInto(exitingBB->getParent(), exitFallThrough);
+      builder.SetInsertPoint(terminatingBB);
+      builder.CreateCall(getGRFunction(*(exitingBB->getModule())));
+      builder.CreateBr(exitFallThrough);
+      builder.SetInsertPoint(prevBB);
+      builder.CreateCondBr(prevBBICmd, exitFallThrough, terminatingBB);
+
+
+      // update the targets of all BBs in inLoopBBs from exitingBB to firstCheck
+      for(auto currILBB: inLoopBBs) {
+        Instruction* termInst = currILBB->getTerminator();
+        termInst->replaceUsesOfWith(exitingBB, firstCheck);
+      }
+
+      // finally update the PHI instructions in exitingBB that refer to one of the
+      for(auto &currInstr: *exitingBB) {
+        Instruction *currInstrPtr = &currInstr;
+        if(PHINode *phiInstr = dyn_cast<PHINode>(currInstrPtr)) {
+          for(auto targetBB: inLoopBBs) {
+            int bbIndx = phiInstr->getBasicBlockIndex(targetBB);
+            if (bbIndx >= 0) {
+              Value *targetValue = phiInstr->getIncomingValue(bbIndx);
+              phiInstr->removeIncomingValue(bbIndx);
+              phiInstr->addIncoming(targetValue, exitFallThrough);
+            }
+          }
+        }
+      }
+    }
+    return true;
+  }
+
   bool runOnFunction(Function &F) override
   {
     // Should we instrument this function?
@@ -149,41 +301,56 @@ public:
       return false;
     }
 
-    // Place a call to our delay function at the end of every basic block in the function
     bool edited = false;
     errs() << TAG << "Instrumenting: " << F.getName() << "!\n";
 
-    // LoopInfo *LI = &getAnalysis<LoopInfo>(F);
     LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 
     // errs() << TAG << LI << "\n";
     if (isFunctionSafeToModify(&F))
     {
-      errs() << TAG << F << "\n";
-      for (auto &bb : F)
+      // get all the loops in the function.
+      for (auto *lobj: LI.getLoopsInPreorder())
       {
-        bool isLoop = LI.getLoopFor(&bb);
-        if (isLoop)
-        {
-          errs() << "loop{\n";
-          for (auto &ins : bb)
-          {
-            errs() << TAG << ins << "\n";
-            if (isa<BranchInst>(ins))
-            {
-            }
-          }
-          errs() << "}\n";
+        // for each loop create a new local variable.
+        Value *loopVar = createNewLocalVariable(F);
+
+        // before entering the loop..set the value of the variable to 0
+        std::set<BasicBlock*> entryBBs;
+        entryBBs.clear();
+        getEnteringBBs(lobj, entryBBs);
+        assert(!entryBBs.empty() && "There has to be en try BBs.");
+        resetValue(loopVar, entryBBs);
+
+        SmallVector<BasicBlock *, 32> exitBBs;
+        exitBBs.clear();
+        // get the exit basic blocks.
+        lobj->getExitingBlocks(exitBBs);
+
+        std::vector<unsigned> solomonCodes;
+        solomonCodes.clear();
+        // get solomon codes for each of the exiting BBs
+        generateNumbersWithMaximumHamming(exitBBs.size(), solomonCodes);
+        assert(exitBBs.size() == solomonCodes.size()  && "Unable to get required number of solomon codes.");
+        std::map<BasicBlock*, unsigned> exitingBBCodes;
+        exitingBBCodes.clear();
+        unsigned solIdx = 0;
+
+        // assign one code for each of the exiting BB
+        for(auto currExitBB: exitBBs) {
+          exitingBBCodes[currExitBB] = solomonCodes[solIdx];
+          // store the corresponding value into the loop local var.
+          storeValue(solomonCodes[solIdx], loopVar, currExitBB);
+          solIdx++;
         }
-        // // errs() << TAG << bb << "\n";
-        // for (auto &ins : bb)
-        // {
-        //   // errs() << TAG << ins << "\n";
-        //   if (isa<BranchInst>(ins))
-        //   {
-        //   }
-        // }
-        // insertDelay(&bb.back(), false);
+
+        // get the correspondence of exiting loop bbs
+        std::map<BasicBlock*, std::set<BasicBlock*>> exitBBCorrespondence;
+        exitBBCorrespondence.clear();
+        getExitBBCorrespondence(lobj, exitBBCorrespondence);
+
+        // protect the loop exits.
+        protectLoopExits(exitBBCorrespondence, exitingBBCodes, loopVar);
       }
     }
 
