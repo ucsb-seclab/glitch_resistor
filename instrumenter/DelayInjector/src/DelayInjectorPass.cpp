@@ -25,17 +25,17 @@ using namespace llvm;
 
 #define DELAY_FUNC_NAME "gpdelay"
 
-namespace GLitchPlease
-{
+namespace GLitchPlease {
 
-static cl::OptionCategory GPOptions("delayinjectorpass options");
 
-cl::opt<bool> Verbose("verbose",
-                      cl::desc("Print verbose information"),
-                      cl::init(false),
-                      cl::cat(GPOptions));
+  static cl::OptionCategory GPOptions("delayinjectorpass options");
 
-/***
+  cl::opt<bool> Verbose("verbose",
+                        cl::desc("Print verbose information"),
+                        cl::init(false),
+                        cl::cat(GPOptions));
+
+  /***
    * The main pass.
    */
   struct DelayInjectorPass : public FunctionPass {
@@ -60,12 +60,7 @@ cl::opt<bool> Verbose("verbose",
       }
       return this->delayFunction;
     }
-    return this->delayFunction;
-  }
 
-  ~DelayInjectorPass()
-  {
-  }
 
     ~DelayInjectorPass() {
     }
@@ -75,42 +70,42 @@ cl::opt<bool> Verbose("verbose",
      * Initialize our annotated functions set
      */
     virtual bool doInitialization(Module &M)override{
-        getAnnotatedFunctions(&M);
-        return false;
+      getAnnotatedFunctions(&M);
+      return false;
     }
 
     /**
      * Return false if this function was explicitly annoted to passed over
      */
     bool shouldInstrumentFunc(Function &F){
-        return annotFuncs.find(&F)==annotFuncs.end();
+      return annotFuncs.find(&F)==annotFuncs.end();
     }
 
-    /** 
+    /**
      * Get a list of all of the annotated functions
      */
     void getAnnotatedFunctions(Module *M){
-        for (Module::global_iterator I = M->global_begin(),
-                E = M->global_end();
-                I != E;
-                ++I) {
+      for (Module::global_iterator I = M->global_begin(),
+             E = M->global_end();
+           I != E;
+           ++I) {
 
-            if (I->getName() == "llvm.global.annotations") {
-                ConstantArray *CA = dyn_cast<ConstantArray>(I->getOperand(0));
-                for(auto OI = CA->op_begin(); OI != CA->op_end(); ++OI){
-                    ConstantStruct *CS = dyn_cast<ConstantStruct>(OI->get());
-                    Function *FUNC = dyn_cast<Function>(CS->getOperand(0)->getOperand(0));
-                    GlobalVariable *AnnotationGL = dyn_cast<GlobalVariable>(CS->getOperand(1)->getOperand(0));
-                    StringRef annotation = dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())->getAsCString();
-                    if(annotation.compare(AnnotationString)==0){
-                        annotFuncs.insert(FUNC);
-                        if(Verbose) {
-                          dbgs() << "Found annotated function " << FUNC->getName()<<"\n";
-                        }
-                    }
-                }
+        if (I->getName() == "llvm.global.annotations") {
+          ConstantArray *CA = dyn_cast<ConstantArray>(I->getOperand(0));
+          for(auto OI = CA->op_begin(); OI != CA->op_end(); ++OI){
+            ConstantStruct *CS = dyn_cast<ConstantStruct>(OI->get());
+            Function *FUNC = dyn_cast<Function>(CS->getOperand(0)->getOperand(0));
+            GlobalVariable *AnnotationGL = dyn_cast<GlobalVariable>(CS->getOperand(1)->getOperand(0));
+            StringRef annotation = dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())->getAsCString();
+            if(annotation.compare(AnnotationString)==0){
+              annotFuncs.insert(FUNC);
+              if(Verbose) {
+                dbgs() << "Found annotated function " << FUNC->getName()<<"\n";
+              }
             }
+          }
         }
+      }
     }
 
     /***
@@ -119,49 +114,43 @@ cl::opt<bool> Verbose("verbose",
      * @param insertAfter flag to indicate that call should be inserted after the instruction.
      * @return true if insertion is succesful else false
      */
-  bool insertDelay(Instruction *targetInstr, bool insertAfter = false)
-  {
-    bool retVal = true;
+    bool insertDelay(Instruction *targetInstr, bool insertAfter = false) {
+      bool retVal = true;
 
-    try
-    {
-      if (Verbose)
-      {
-        dbgs() << "Instrumenting:" << *targetInstr << "\n";
+      try {
+        if(Verbose) {
+          dbgs() << "Instrumenting:" << *targetInstr << "\n";
+        }
+        // set the insertion point to be after the load instruction.
+        auto targetInsertPoint = targetInstr->getIterator();
+        if(insertAfter) {
+          targetInsertPoint++;
+        }
+        IRBuilder<> builder(&(*targetInsertPoint));
+
+        // get the log function
+        Function *targetFunction = this->getDelayFunction(*targetInstr->getModule());
+
+        // create call.
+        builder.CreateCall(targetFunction);
+      } catch (const std::exception &e) {
+        dbgs() << "[?] Error occurred while trying to instrument instruction:" << e.what() << "\n";
+        retVal = false;
       }
-      // set the insertion point to be after the load instruction.
-      auto targetInsertPoint = targetInstr->getIterator();
-      if (insertAfter)
-      {
-        targetInsertPoint++;
-      }
-      IRBuilder<> builder(&(*targetInsertPoint));
-
-      // get the log function
-      Function *targetFunction = this->getDelayFunction(*targetInstr->getModule());
-
-      // create call.
-      builder.CreateCall(targetFunction);
+      return retVal;
     }
-    catch (const std::exception &e)
-    {
-      dbgs() << "[?] Error occurred while trying to instrument instruction:" << e.what() << "\n";
-      retVal = false;
-    }
-    return retVal;
-  }
 
-  /***
+    /***
      * Check if the provided function is safe to modify.
      * @param currF Function to check.
      * @return flag that indicates if we can modify the current function or not.
      */
-  bool isFunctionSafeToModify(const Function *currF)
-  {
-    return !(!currF->isDeclaration() && currF->hasName() && currF->getName().equals(DELAY_FUNC_NAME));
-  }
+    bool isFunctionSafeToModify(const Function *currF) {
+      return !(!currF->isDeclaration() && currF->hasName() && currF->getName().equals(DELAY_FUNC_NAME));
+    }
 
-  /***
+
+    /***
      * The function is the insertion oracle. This returns true
      * if delay has to be inserted at (before or after) the instruction.
      * @param currInstr Insruction before which the delay has to be inserted.
@@ -181,7 +170,7 @@ cl::opt<bool> Verbose("verbose",
     bool runOnFunction(Function &F) override {
       // Should we instrument this function?
       if(shouldInstrumentFunc(F)==false) {
-            return false;
+        return false;
       }
 
       // Place a call to our delay function at the end of every basic block in the function
@@ -192,6 +181,8 @@ cl::opt<bool> Verbose("verbose",
           insertDelay(&bb.back(), false);
         }
       }
+
+      return edited;
     }
 
   };
@@ -199,10 +190,10 @@ cl::opt<bool> Verbose("verbose",
   char DelayInjectorPass::ID = 0;
   // pass arg, pass desc, cfg_only, analysis only
   static RegisterPass<DelayInjectorPass> x("injectDelay",
-                                            "Instrument the provided module by "
-                                            "inserting call to functions that cause random delays.",
-                                            false,
-                                            false);
+                                           "Instrument the provided module by "
+                                           "inserting call to functions that cause random delays.",
+                                           false,
+                                           false);
 
   // Pass loading stuff
   // To use, run: clang -Xclang -load -Xclang <your-pass>.so <other-args> ...
