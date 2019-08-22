@@ -70,42 +70,42 @@ namespace GLitchPlease {
      * Initialize our annotated functions set
      */
     virtual bool doInitialization(Module &M)override{
-        getAnnotatedFunctions(&M);
-        return false;
+      getAnnotatedFunctions(&M);
+      return false;
     }
 
     /**
      * Return false if this function was explicitly annoted to passed over
      */
     bool shouldInstrumentFunc(Function &F){
-        return annotFuncs.find(&F)==annotFuncs.end();
+      return annotFuncs.find(&F)==annotFuncs.end();
     }
 
-    /** 
+    /**
      * Get a list of all of the annotated functions
      */
     void getAnnotatedFunctions(Module *M){
-        for (Module::global_iterator I = M->global_begin(),
-                E = M->global_end();
-                I != E;
-                ++I) {
+      for (Module::global_iterator I = M->global_begin(),
+             E = M->global_end();
+           I != E;
+           ++I) {
 
-            if (I->getName() == "llvm.global.annotations") {
-                ConstantArray *CA = dyn_cast<ConstantArray>(I->getOperand(0));
-                for(auto OI = CA->op_begin(); OI != CA->op_end(); ++OI){
-                    ConstantStruct *CS = dyn_cast<ConstantStruct>(OI->get());
-                    Function *FUNC = dyn_cast<Function>(CS->getOperand(0)->getOperand(0));
-                    GlobalVariable *AnnotationGL = dyn_cast<GlobalVariable>(CS->getOperand(1)->getOperand(0));
-                    StringRef annotation = dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())->getAsCString();
-                    if(annotation.compare(AnnotationString)==0){
-                        annotFuncs.insert(FUNC);
-                        if(Verbose) {
-                          dbgs() << "Found annotated function " << FUNC->getName()<<"\n";
-                        }
-                    }
-                }
+        if (I->getName() == "llvm.global.annotations") {
+          ConstantArray *CA = dyn_cast<ConstantArray>(I->getOperand(0));
+          for(auto OI = CA->op_begin(); OI != CA->op_end(); ++OI){
+            ConstantStruct *CS = dyn_cast<ConstantStruct>(OI->get());
+            Function *FUNC = dyn_cast<Function>(CS->getOperand(0)->getOperand(0));
+            GlobalVariable *AnnotationGL = dyn_cast<GlobalVariable>(CS->getOperand(1)->getOperand(0));
+            StringRef annotation = dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())->getAsCString();
+            if(annotation.compare(AnnotationString)==0){
+              annotFuncs.insert(FUNC);
+              if(Verbose) {
+                dbgs() << "Found annotated function " << FUNC->getName()<<"\n";
+              }
             }
+          }
         }
+      }
     }
 
     /***
@@ -170,7 +170,7 @@ namespace GLitchPlease {
     bool runOnFunction(Function &F) override {
       // Should we instrument this function?
       if(shouldInstrumentFunc(F)==false) {
-            return false;
+        return false;
       }
 
       // Place a call to our delay function at the end of every basic block in the function
@@ -190,10 +190,10 @@ namespace GLitchPlease {
   char DelayInjectorPass::ID = 0;
   // pass arg, pass desc, cfg_only, analysis only
   static RegisterPass<DelayInjectorPass> x("injectDelay",
-                                            "Instrument the provided module by "
-                                            "inserting call to functions that cause random delays.",
-                                            false,
-                                            false);
+                                           "Instrument the provided module by "
+                                           "inserting call to functions that cause random delays.",
+                                           false,
+                                           false);
 
   // Pass loading stuff
   // To use, run: clang -Xclang -load -Xclang <your-pass>.so <other-args> ...
