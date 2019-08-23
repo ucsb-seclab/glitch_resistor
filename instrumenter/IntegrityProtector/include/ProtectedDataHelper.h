@@ -14,8 +14,8 @@
 using namespace llvm;
 
 namespace GLitchPlease {
-  extern cl::opt<bool> Verbose;
-
+  // extern cl::opt<bool> Verbose;
+  extern std::string TAG;
   /***
    *  This class handles looking up data values that need to be protected.
    *  This also creates duplicate variables, that store the integrity value
@@ -23,6 +23,7 @@ namespace GLitchPlease {
    */
   class ProtectedDataHandler {
   public:
+    
     ProtectedDataHandler(Module &M, std::set<std::string> &protGlob) : m(M), toProtectGlobVarNames(protGlob) {
       this->toProtectDataVars.clear();
       this->shadowDataVars.clear();

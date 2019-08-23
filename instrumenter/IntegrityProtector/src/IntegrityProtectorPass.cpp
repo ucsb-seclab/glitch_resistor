@@ -24,10 +24,10 @@ namespace GLitchPlease {
 
   static cl::OptionCategory GPOptions("integrityprotectorpass options");
 
-  cl::opt<bool> Verbose("verbose",
-                        cl::desc("Print verbose information"),
-                        cl::init(false),
-                        cl::cat(GPOptions));
+  // cl::opt<bool> Verbose("verbose",
+  //                       cl::desc("Print verbose information"),
+  //                       cl::init(false),
+  //                       cl::cat(GPOptions));
 
   cl::opt<std::string> GlobalsFile("globals",
                                    cl::desc("Path to the file containing global variable that need to be protected."),
@@ -60,7 +60,7 @@ namespace GLitchPlease {
 
     bool runOnModule(Module &m) override {
       bool edited = false;
-      // read teh global variables to be protected.
+      // read the global variables to be protected.
       std::set<std::string> toProtectVars;
       if(!readFileLines(GlobalsFile, toProtectVars)) {
         llvm::errs() << "[-] Unable to read globals to protect from the file:" << GlobalsFile << "\n";

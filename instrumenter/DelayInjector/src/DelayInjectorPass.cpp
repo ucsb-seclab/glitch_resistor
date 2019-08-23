@@ -30,10 +30,10 @@ namespace GLitchPlease {
 
   static cl::OptionCategory GPOptions("delayinjectorpass options");
 
-  cl::opt<bool> Verbose("verbose",
-                        cl::desc("Print verbose information"),
-                        cl::init(false),
-                        cl::cat(GPOptions));
+  // cl::opt<bool> Verbose("verbose",
+  //                       cl::desc("Print verbose information"),
+  //                       cl::init(false),
+  //                       cl::cat(GPOptions));
 
   /***
    * The main pass.
@@ -44,6 +44,7 @@ namespace GLitchPlease {
     Function *delayFunction;
     std::set<Function*> annotFuncs;
     std::string AnnotationString = "NoResistor";
+    std::string TAG = "\033[1;31m[GR/Timing]\033[0m ";
 
     DelayInjectorPass() : FunctionPass(ID) {
       this->delayFunction = nullptr;
@@ -99,9 +100,9 @@ namespace GLitchPlease {
             StringRef annotation = dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())->getAsCString();
             if(annotation.compare(AnnotationString)==0){
               annotFuncs.insert(FUNC);
-              if(Verbose) {
-                dbgs() << "Found annotated function " << FUNC->getName()<<"\n";
-              }
+              // if(Verbose) {
+              //   dbgs() << "Found annotated function " << FUNC->getName()<<"\n";
+              // }
             }
           }
         }
@@ -118,9 +119,9 @@ namespace GLitchPlease {
       bool retVal = true;
 
       try {
-        if(Verbose) {
-          dbgs() << "Instrumenting:" << *targetInstr << "\n";
-        }
+        // if(Verbose) {
+        //   dbgs() << "Instrumenting:" << *targetInstr << "\n";
+        // }
         // set the insertion point to be after the load instruction.
         auto targetInsertPoint = targetInstr->getIterator();
         if(insertAfter) {
@@ -175,7 +176,7 @@ namespace GLitchPlease {
 
       // Place a call to our delay function at the end of every basic block in the function
       bool edited = false;
-      errs() << "\033[1;31m[GR/Timing]\033[0m Instrumenting: " << F.getName() << "!\n";
+      errs() << TAG << "Instrumenting: " << F.getName() << "!\n";
       if(isFunctionSafeToModify(&F)) {
         for (auto &bb: F) {
           insertDelay(&bb.back(), false);

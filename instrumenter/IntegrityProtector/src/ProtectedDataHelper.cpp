@@ -17,9 +17,9 @@ std::set<Value*>& ProtectedDataHandler::getToProtectDataElements() {
         if (toProtectGlobVarNames.find(globName) != toProtectGlobVarNames.end()) {
           // check if this does not have its address taken
           if (!isAddressTaken(&globV)) {
-            if (Verbose) {
+            // if (Verbose) {
               llvm::errs() << "[+] Global Variable:" << globName << " is selected to be protected.\n";
-            }
+            // }
             toProtectDataVars.insert(&globV);
           } else {
             // requested a variable to be protected, but the variable
@@ -45,11 +45,11 @@ std::map<Value*, Value*>& ProtectedDataHandler::getShadowDataMap() {
         std::string newGVarName = gVar->getName().str() + "_gpintegrity";
         Constant *newIntegrityVal = m.getOrInsertGlobal(newGVarName, gVar->getType()->getPointerElementType());
         assert(newIntegrityVal && "Failed to insert a new global variable.");
-        if(Verbose) {
+        // if(Verbose) {
           llvm::errs() << "[+] Created a new global variable:" <<
                           newGVarName << " to protect:" <<
                           gVar->getName().str() << "\n";
-        }
+        // }
 
         GlobalVariable *newGlobVar = dyn_cast<GlobalVariable>(newIntegrityVal);
         // set the linkage
