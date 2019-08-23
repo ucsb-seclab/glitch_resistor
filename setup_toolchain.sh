@@ -32,7 +32,6 @@ echo "export ARM_GCC_TOOLCHAIN=$PWD/runtime/gcc-arm-none-eabi-8-2019-q3-update/b
 echo "export RISCV_OPENOCD_PATH=$PWD/runtime/riscv-openocd-0.10.0-2019.05.1-x86_64-apple-darwin" >> .envrc
 echo "export RISCV_PATH=$PWD/runtime/riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-apple-darwin
 " >> .envrc
-echo "export LLVM_CC=clang" >> .envrc
 echo "PATH_add $PWD/runtime/gcc-arm-none-eabi-8-2019-q3-update/bin" >> .envrc
 direnv allow .
 
