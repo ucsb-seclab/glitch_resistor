@@ -41,6 +41,9 @@ This will also add the `bin` directory of our Source Rewriter to your direnv pat
 gp-source-rewriter
 ```
 
+# ARM compiler
+We used the latest version of the arm compiler from [here](https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm/downloads/8-2019q3-update)
+
 ## Defenses
 There are two main components of our defense:
 * Source Rewriter (*gp_source_rewriter*)
