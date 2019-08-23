@@ -6,7 +6,7 @@ if [ ! -d llvm-8.0.0.src ]; then
 	rm llvm-8.0.0.src.tar.xz
 fi
 
-if [ ! -d cfe-8.0.0.src ]; then
+if [ ! -d llvm-8.0.0.src/tools/clang ]; then
 	curl -L -O http://llvm.org/releases/8.0.0/cfe-8.0.0.src.tar.xz
 	tar xvf cfe-8.0.0.src.tar.xz
 	mv cfe-8.0.0.src llvm-8.0.0.src/tools/clang
