@@ -47,7 +47,6 @@ public:
   static char ID;
   Function *grFunction;
   std::set<Function *> annotFuncs;
-  bool debug=false;
   std::string AnnotationString = "NoResistor";
   std::string TAG = "\033[1;31m[GR/Loop]\033[0m ";
 
