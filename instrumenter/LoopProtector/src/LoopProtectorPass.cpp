@@ -47,6 +47,7 @@ public:
   static char ID;
   Function *grFunction;
   std::set<Function *> annotFuncs;
+  bool debug=false;
   std::string AnnotationString = "NoResistor";
   std::string TAG = "\033[1;31m[GR/Loop]\033[0m ";
 
@@ -191,7 +192,6 @@ public:
     if (dstBB->getInstList().size() > 1)
     {
       auto termIt = dstBB->getTerminator()->getIterator();
-      termIt--;
       builder.SetInsertPoint(&(*termIt));
     }
     Value *cons = ConstantInt::get(IntegerType::getInt32Ty(dstBB->getContext()), storeCons);
@@ -259,87 +259,87 @@ public:
     LLVMContext &C = loopVariable->getContext();
     for (auto &exitBBCoL:exitBBCorrespondence)
     {
-      BasicBlock *exitingBB = exitBBCoL.first;
+      BasicBlock *originalExitingBB = exitBBCoL.first;
       std::set<BasicBlock*> &inLoopBBs = exitBBCoL.second;
 
-      // create a fall through block for the exiting bb
-      BasicBlock *exitFallThrough = BasicBlock::Create(exitingBB->getContext(), "exitFallThrough");
-      exitFallThrough->insertInto(exitingBB->getParent(), exitingBB);
-      IRBuilder<> builder(exitFallThrough);
-      // jump to the exiting bb
-      builder.CreateBr(exitingBB);
+      Instruction *exitingSplitInstr = nullptr;
 
-      Value* loopLoadVal = nullptr;
-      BasicBlock *firstCheck = nullptr;
-      BasicBlock *prevBB = nullptr;
-      Value *prevBBICmd = nullptr;
-
-      // for each of the in loop basic blocks, create a comparision instruction
-      for (auto *inLoopBB: inLoopBBs)
-      {
-        unsigned bbUniqueNumber = exitingBBCodes[inLoopBB];
-        BasicBlock *cmpBB = BasicBlock::Create(C, "checkVal");
-        cmpBB->insertInto(exitingBB->getParent(), exitFallThrough);
-        IRBuilder<> inCmdBuilder(cmpBB);
-        // is this first bb in the chain of comparisons
-        if (firstCheck == nullptr)
-        {
-          loopLoadVal = inCmdBuilder.CreateLoad(loopVariable);
-          firstCheck = cmpBB;
-        }
-        assert(loopLoadVal != nullptr && "Load value cannot be null.");
-        Value *cons = ConstantInt::get(IntegerType::getInt32Ty(C), bbUniqueNumber);
-        // create a comparision instruction.
-        Value *icmpEq = inCmdBuilder.CreateICmpEQ(loopLoadVal, cons);
-
-        if (prevBB != nullptr)
-        {
-          // link to the previous basic-block
-          inCmdBuilder.SetInsertPoint(prevBB);
-          inCmdBuilder.CreateCondBr(prevBBICmd, exitFallThrough, cmpBB);
-        }
-
-        prevBB = cmpBB;
-        prevBBICmd = icmpEq;
-      }
-
-      // create loop check failed BB
-      BasicBlock *terminatingBB = BasicBlock::Create(exitingBB->getContext(), "LoopCheckFailed");
-      terminatingBB->insertInto(exitingBB->getParent(), exitFallThrough);
-      builder.SetInsertPoint(terminatingBB);
-      builder.CreateCall(getGRFunction(*(exitingBB->getModule())));
-      builder.CreateBr(exitFallThrough);
-
-      // link the last BB to the check failed BB
-      builder.SetInsertPoint(prevBB);
-      builder.CreateCondBr(prevBBICmd, exitFallThrough, terminatingBB);
-
-
-      // update the targets of all BBs in inLoopBBs from exitingBB to firstCheck
-      // instead of jumping to exit, jump to the checking chain.
-      for (auto currILBB: inLoopBBs)
-      {
-        Instruction* termInst = currILBB->getTerminator();
-        termInst->replaceUsesOfWith(exitingBB, firstCheck);
-      }
-
-      // finally update the PHI instructions in exitingBB that refer to one of the
-      // inloop BB with exitFallThrough BB
-      for (auto &currInstr: *exitingBB)
+      // first, split the exiting BB after all the PHI instructions.
+      for (auto &currInstr: *originalExitingBB)
       {
         Instruction *currInstrPtr = &currInstr;
-        if (PHINode *phiInstr = dyn_cast<PHINode>(currInstrPtr))
+        if (!dyn_cast<PHINode>(currInstrPtr))
         {
-          for (auto targetBB: inLoopBBs)
+          exitingSplitInstr = currInstrPtr;
+          break;
+        }
+      }
+
+      if(exitingSplitInstr != nullptr) {
+        // split the block at the splitting instruction.
+        BasicBlock *newExitBB = SplitBlock(originalExitingBB, exitingSplitInstr);
+
+        // create a fall through block for the exiting bb
+        BasicBlock *exitFallThrough = BasicBlock::Create(originalExitingBB->getContext(), "exitFallThrough");
+        exitFallThrough->insertInto(originalExitingBB->getParent(), originalExitingBB);
+        IRBuilder<> builder(exitFallThrough);
+        // jump to the newly splitted exit bb
+        builder.CreateBr(newExitBB);
+
+        Value* loopLoadVal = nullptr;
+        BasicBlock *firstCheck = nullptr;
+        BasicBlock *prevBB = nullptr;
+        Value *prevBBICmd = nullptr;
+
+        // for each of the in loop basic blocks, create a comparision instruction
+        for (auto *inLoopBB: inLoopBBs)
+        {
+          unsigned bbUniqueNumber = exitingBBCodes[inLoopBB];
+          BasicBlock *cmpBB = BasicBlock::Create(C, "checkVal");
+          cmpBB->insertInto(originalExitingBB->getParent(), exitFallThrough);
+          IRBuilder<> inCmdBuilder(cmpBB);
+          // is this first bb in the chain of comparisons
+          if (firstCheck == nullptr)
           {
-            int bbIndx = phiInstr->getBasicBlockIndex(targetBB);
-            if (bbIndx >= 0)
-            {
-              Value *targetValue = phiInstr->getIncomingValue(bbIndx);
-              phiInstr->removeIncomingValue(bbIndx);
-              phiInstr->addIncoming(targetValue, exitFallThrough);
-            }
+            loopLoadVal = inCmdBuilder.CreateLoad(loopVariable);
+            firstCheck = cmpBB;
           }
+          assert(loopLoadVal != nullptr && "Load value cannot be null.");
+          Value *cons = ConstantInt::get(IntegerType::getInt32Ty(C), bbUniqueNumber);
+          // create a comparision instruction.
+          Value *icmpEq = inCmdBuilder.CreateICmpEQ(loopLoadVal, cons);
+
+          if (prevBB != nullptr)
+          {
+            // link to the previous basic-block
+            inCmdBuilder.SetInsertPoint(prevBB);
+            inCmdBuilder.CreateCondBr(prevBBICmd, exitFallThrough, cmpBB);
+          }
+
+          prevBB = cmpBB;
+          prevBBICmd = icmpEq;
+        }
+
+        // create loop check failed BB
+        BasicBlock *terminatingBB = BasicBlock::Create(originalExitingBB->getContext(), "LoopCheckFailed");
+        terminatingBB->insertInto(originalExitingBB->getParent(), exitFallThrough);
+        builder.SetInsertPoint(terminatingBB);
+        builder.CreateCall(getGRFunction(*(originalExitingBB->getModule())));
+        builder.CreateBr(exitFallThrough);
+
+        // link the last BB to the check failed BB
+        builder.SetInsertPoint(prevBB);
+        builder.CreateCondBr(prevBBICmd, exitFallThrough, terminatingBB);
+
+        // update the original exit BB so that it jumps to our
+        // series of newly inserted checks
+        Instruction* termInst = originalExitingBB->getTerminator();
+        termInst->replaceUsesOfWith(newExitBB, firstCheck);
+
+      } else {
+        if(Verbose) {
+          errs() << "Not instrumenting loop as we cannot split exiting basic block:";
+          originalExitingBB->dump();
         }
       }
     }
