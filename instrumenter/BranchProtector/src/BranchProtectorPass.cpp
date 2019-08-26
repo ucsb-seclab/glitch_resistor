@@ -52,13 +52,13 @@ public:
   std::string AnnotationString = "NoResistor";
   std::set<Instruction *> insertedBranches;
   std::string TAG = "\033[1;31m[GR/Branch]\033[0m ";
-
+  bool Verbose = false;
   BranchProtectorPass() : FunctionPass(ID)
   {
     this->grFunction = nullptr;
   }
 
-  Function *getDelayFunction(Module &m)
+  Function *getGRFunction(Module &m)
   {
     if (this->grFunction == nullptr)
     {
@@ -139,9 +139,21 @@ public:
    * @param currIn Instruction to be checked.
    * @return true if can be replicate else false.
    */
-  bool canReplicate(Instruction *currIn) {
+  bool canReplicate(Instruction *currIn)
+  {
+    // Let's not replicate volatile memory loads
+    // These values SHOULD actually change between comparisions
+    if (LoadInst *LI = dyn_cast<LoadInst>(currIn))
+    {
+      if (LI->isVolatile())
+      {
+        return false;
+      }
+    }
+
     // it should not be a call or a load or constant instruction.
-    return !(dyn_cast<CallInst>(currIn) || dyn_cast<Constant>(currIn));
+    // PHINodes also pose issues since they can span multiple basic blocks
+    return !(dyn_cast<CallInst>(currIn) || dyn_cast<Constant>(currIn) || dyn_cast<PHINode>(currIn));
   }
 
   /***
@@ -150,7 +162,8 @@ public:
    * @param currIn Instruction to check.
    * @return true if the operands can be replicated.
    */
-  bool canReplicateOperands(Instruction *currIn) {
+  bool canReplicateOperands(Instruction *currIn)
+  {
     // it should not be a call or a load or constant instruction.
     return !(dyn_cast<CallInst>(currIn) || dyn_cast<LoadInst>(currIn) || dyn_cast<Constant>(currIn));
   }
@@ -162,19 +175,26 @@ public:
    * @param allInstrs list of instructions that needed to replicate.
    * @return true if there are any instructions that needed to replicate.
    */
-  bool recursivelyGetInstructionsToReplicate(Instruction *currInstr, std::vector<Instruction*> &allInstrs) {
+  bool recursivelyGetInstructionsToReplicate(Instruction *currInstr, std::vector<Instruction *> &allInstrs)
+  {
     bool hasInstrInserted = false;
-    if (currInstr != nullptr) {
+    if (currInstr != nullptr)
+    {
       // check if the current instruction is already visited?
-      if (std::find(allInstrs.begin(), allInstrs.end(), currInstr) == allInstrs.end()) {
+      if (std::find(allInstrs.begin(), allInstrs.end(), currInstr) == allInstrs.end())
+      {
         allInstrs.insert(allInstrs.begin(), currInstr);
         hasInstrInserted = true;
-        if (canReplicateOperands(currInstr)) {
+        if (canReplicateOperands(currInstr))
+        {
           assert(dyn_cast<StoreInst>(currInstr) == nullptr && "We cannot have store instruction as an operand.");
-          for (unsigned i = 0; i < currInstr->getNumOperands(); i++) {
+          for (unsigned i = 0; i < currInstr->getNumOperands(); i++)
+          {
             Value *currOp = currInstr->getOperand(i);
-            if (Instruction *CI = dyn_cast<Instruction>(currOp)) {
-              if(canReplicate(CI)) {
+            if (Instruction *CI = dyn_cast<Instruction>(currOp))
+            {
+              if (canReplicate(CI))
+              {
                 hasInstrInserted = recursivelyGetInstructionsToReplicate(CI, allInstrs) || hasInstrInserted;
               }
             }
@@ -194,9 +214,11 @@ public:
    * @param allInstrs List of all instructions that need to be replicated.
    * @return true if one or more instructions need to be replicated.
    */
-  bool getAllInstrToReplicate(BranchInst &targetInstr, std::vector<Instruction*> &allInstrs) {
+  bool getAllInstrToReplicate(BranchInst &targetInstr, std::vector<Instruction *> &allInstrs)
+  {
     assert(targetInstr.isConditional() && "This has to be conditional.");
-    if(Instruction *CI = dyn_cast<Instruction>(targetInstr.getCondition())) {
+    if (Instruction *CI = dyn_cast<Instruction>(targetInstr.getCondition()))
+    {
       return recursivelyGetInstructionsToReplicate(CI, allInstrs);
     }
     return false;
@@ -209,16 +231,21 @@ public:
    * @param allInstrs vector of all the instructions that needed to be replicated.
    * @return true if the insertion is successful.
    */
-  bool duplicateInstructions(IRBuilder<> &builder, BranchInst &targetBrInst, std::vector<Instruction*> &allInstrs) {
-    std::map<Instruction*, Instruction*> replicatedInstrs;
-    for(auto currIn: allInstrs) {
+  bool duplicateInstructions(IRBuilder<> &builder, BranchInst &targetBrInst, std::vector<Instruction *> &allInstrs)
+  {
+    std::map<Instruction *, Instruction *> replicatedInstrs;
+    for (auto currIn : allInstrs)
+    {
       Instruction *newInstr = currIn->clone();
       builder.Insert(newInstr);
       replicatedInstrs[currIn] = newInstr;
-      for (unsigned i = 0; i < newInstr->getNumOperands(); i++) {
+      for (unsigned i = 0; i < newInstr->getNumOperands(); i++)
+      {
         Value *currOp = newInstr->getOperand(i);
-        if (Instruction *opInstr = dyn_cast<Instruction>(currOp)) {
-          if(replicatedInstrs.find(opInstr) != replicatedInstrs.end()) {
+        if (Instruction *opInstr = dyn_cast<Instruction>(currOp))
+        {
+          if (replicatedInstrs.find(opInstr) != replicatedInstrs.end())
+          {
             newInstr->replaceUsesOfWith(currOp, replicatedInstrs[opInstr]);
           }
         }
@@ -226,8 +253,10 @@ public:
     }
     // Okay, now that we replicated all the instructions.
     // change the condition of the branch instruction to refer to the newly inserted instruction.
-    if(Instruction *CI = dyn_cast<Instruction>(targetBrInst.getCondition())) {
-      if(replicatedInstrs.find(CI) != replicatedInstrs.end()) {
+    if (Instruction *CI = dyn_cast<Instruction>(targetBrInst.getCondition()))
+    {
+      if (replicatedInstrs.find(CI) != replicatedInstrs.end())
+      {
         targetBrInst.replaceUsesOfWith(targetBrInst.getCondition(), replicatedInstrs[CI]);
       }
     }
@@ -280,7 +309,7 @@ public:
       targetInstr.setSuccessor(0, doubleCheck);
 
       // Get the detection function
-      Function *targetFunction = this->getDelayFunction(*targetInstr.getModule());
+      Function *targetFunction = this->getGRFunction(*targetInstr.getModule());
 
       // Construct our redundant check and call to detection function
       builder.SetInsertPoint(doubleCheck);
@@ -289,7 +318,7 @@ public:
                                                     fallthroughBB,
                                                     failBlock);
       // replicate the comparision activity
-      std::vector<Instruction*> instrsToReplicate;
+      std::vector<Instruction *> instrsToReplicate;
       instrsToReplicate.clear();
       getAllInstrToReplicate(targetInstr, instrsToReplicate);
       builder.SetInsertPoint(branchNew);
@@ -305,17 +334,25 @@ public:
 
       // Now what we should do is in the trueBB.
       // replace all the PHIs that ref targetBB with fallThroughBB
-      for(auto &currInstr: *trueBB) {
+      for (auto &currInstr : *trueBB)
+      {
         Instruction *currInstrPtr = &currInstr;
-        if(PHINode *phiInstr = dyn_cast<PHINode>(currInstrPtr)) {
+        if (PHINode *phiInstr = dyn_cast<PHINode>(currInstrPtr))
+        {
+          if (Verbose)
+            dbgs() << TAG << "Fixing " << *phiInstr << "\n";
           int bbIndx = phiInstr->getBasicBlockIndex(targetBB);
-          if(bbIndx >=0 ) {
+          if (bbIndx >= 0)
+          {
             Value *targetValue = phiInstr->getIncomingValue(bbIndx);
             phiInstr->removeIncomingValue(bbIndx);
             phiInstr->addIncoming(targetValue, fallthroughBB);
           }
         }
       }
+      if (Verbose)
+        dbgs() << TAG << "Inserted: \n"
+               << *doubleCheck << "-----\n";
     }
     catch (const std::exception &e)
     {
@@ -369,7 +406,7 @@ public:
       // errs() << TAG << F << "\n";
       for (auto &bb : F)
       {
-        // errs() << TAG << bb << "\n";
+        // dbgs() << TAG << bb << "\n";
         for (auto &ins : bb)
         {
           // errs() << TAG << ins << "\n";
@@ -387,6 +424,8 @@ public:
           }
         }
         // insertDelay(&bb.back(), false);
+        if (Verbose)
+          dbgs() << TAG << bb << "\n";
       }
     }
 
