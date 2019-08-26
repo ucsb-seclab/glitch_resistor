@@ -11,6 +11,8 @@
 #include <llvm/Analysis/GlobalsModRef.h>
 #include <set>
 #include <fstream>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
 #include "ProtectedDataHelper.h"
 #include "FunctionFetcherHelper.h"
@@ -93,4 +95,14 @@ namespace GLitchPlease {
                                             "the selected data items.",
                                             false,
                                             false);
+                                            // Pass loading stuff
+  // To use, run: clang -Xclang -load -Xclang <your-pass>.so <other-args> ...
+
+  // This function is of type PassManagerBuilder::ExtensionFn
+  static void loadPass(const PassManagerBuilder &Builder, llvm::legacy::PassManagerBase &PM) {
+    PM.add(new IntegrityProtectorPass());
+  }
+  // These constructors add our pass to a list of global extensions.
+  static RegisterStandardPasses clangtoolLoader_Ox(PassManagerBuilder::EP_OptimizerLast, loadPass);
+  static RegisterStandardPasses clangtoolLoader_O0(PassManagerBuilder::EP_EnabledOnOptLevel0, loadPass);
 }
