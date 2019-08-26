@@ -257,7 +257,7 @@ public:
    */
   bool protectLoopExits(std::map<BasicBlock*, std::set<BasicBlock*>> &exitBBCorrespondence,
                         std::map<BasicBlock*, unsigned> &exitingBBCodes,
-                        Value *loopVariable, unsigned uniqueLoopNumber)
+                        Value *loopVariable, unsigned uniqueLoopNumber, std::map<BasicBlock*, BasicBlock*> &splittedBBMap)
                         {
 
     LLVMContext &C = loopVariable->getContext();
@@ -282,6 +282,11 @@ public:
       if(exitingSplitInstr != nullptr) {
         // split the block at the splitting instruction.
         BasicBlock *newExitBB = SplitBlock(originalExitingBB, exitingSplitInstr);
+        BasicBlock *oldAllGoodBlock = nullptr;
+        if(splittedBBMap.find(originalExitingBB) == splittedBBMap.end()) {
+          splittedBBMap[originalExitingBB] = newExitBB;
+        }
+        oldAllGoodBlock = splittedBBMap[originalExitingBB];
 
         // create a fall through block for the exiting bb
         BasicBlock *exitFallThrough = BasicBlock::Create(originalExitingBB->getContext(), "exitFallThrough");
@@ -317,7 +322,7 @@ public:
           {
             // link to the previous basic-block
             inCmdBuilder.SetInsertPoint(prevBB);
-            inCmdBuilder.CreateCondBr(prevBBICmd, exitFallThrough, cmpBB);
+            inCmdBuilder.CreateCondBr(prevBBICmd, oldAllGoodBlock, cmpBB);
           }
 
           prevBB = cmpBB;
@@ -347,7 +352,7 @@ public:
         // link the last BB to the check failed BB
         builder.SetInsertPoint(prevBB);
         // branch of check if the control actually entered the loop or not.
-        builder.CreateCondBr(prevBBICmd, exitFallThrough, loopEntryCheck);
+        builder.CreateCondBr(prevBBICmd, oldAllGoodBlock, loopEntryCheck);
 
         // update the original exit BB so that it jumps to our
         // series of newly inserted checks
@@ -378,6 +383,8 @@ public:
     errs() << TAG << "Instrumenting: " << F.getName() << "!\n";
 
     LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+    std::map<BasicBlock*, BasicBlock*> splittedBBMap;
+    splittedBBMap.clear();
 
     if (isFunctionSafeToModify(&F))
     {
@@ -424,7 +431,7 @@ public:
         getExitBBCorrespondence(lobj, exitBBCorrespondence);
 
         // protect the loop exits.
-        protectLoopExits(exitBBCorrespondence, exitingBBCodes, loopVar, uniqueLoopNumber);
+        protectLoopExits(exitBBCorrespondence, exitingBBCodes, loopVar, uniqueLoopNumber, splittedBBMap);
       }
     }
 
