@@ -32,7 +32,7 @@ __attribute__((annotate("NoResistor"))) void gpdelay() {
     }
     // Update Seed
     delay_seed = (delay_a * delay_seed + delay_c) % delay_m;
-    
+
     // Don't always execute loop
     if (delay_seed < delay_dont_run_prct) {
         // Ensure that only loop delay_a maximum number of times (even delay_a few instructions can throw off delay_a glitch)

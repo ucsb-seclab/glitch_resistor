@@ -36,6 +36,7 @@ BUILD_DIR = build
 ######################################
 # C sources
 C_SOURCES =  \
+Src/glitch_detected.c \
 Src/integritycheckfunc.c \
 Src/delayfunc.c \
 Src/main.c \
