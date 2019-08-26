@@ -153,6 +153,8 @@ public:
     IRBuilder<> builder(&(*(F.getEntryBlock().getFirstInsertionPt())));
     AllocaInst *newAlloca = builder.CreateAlloca(IntegerType::getInt32Ty(F.getContext()), nullptr, "GPLoopVar");
     newAlloca->setAlignment(4);
+    // initialize the loop var to zero.
+    storeValue(0, newAlloca, &F.getEntryBlock());
     return newAlloca;
   }
 
@@ -198,17 +200,18 @@ public:
   }
 
   /***
-   *  Reset the value of the provided loop variable with 0
+   *  Reset the value of the provided loop variable with resetVal
    *
    * @param loopVar pointer to the local variable which needs to be reset.
+   * @param resetVal Value which should be written into the provided loopVar
    * @param targetBBs Blocks where the value should be reset.
    */
-  void resetValue(Value* loopVar, std::set<BasicBlock*> &targetBBs)
+  void resetValue(Value* loopVar, unsigned resetVal, std::set<BasicBlock*> &targetBBs)
   {
     // in each of the basic block..store 0
     for (auto currBB: targetBBs)
     {
-      storeValue(0, loopVar, currBB);
+      storeValue(resetVal, loopVar, currBB);
     }
   }
 
@@ -248,11 +251,13 @@ public:
    *                       numerical codes.
    * @param loopVariable Variable which contains the value corresponding to the
    *                     exit of the loop.
+   * @param uniqueLoopNumber a number that indicates that control flow has
+   *                         entered the loop.
    * @return True, if any instrumentation is done else false.
    */
   bool protectLoopExits(std::map<BasicBlock*, std::set<BasicBlock*>> &exitBBCorrespondence,
                         std::map<BasicBlock*, unsigned> &exitingBBCodes,
-                        Value *loopVariable)
+                        Value *loopVariable, unsigned uniqueLoopNumber)
                         {
 
     LLVMContext &C = loopVariable->getContext();
@@ -326,9 +331,23 @@ public:
         builder.CreateCall(getGRFunction(*(originalExitingBB->getModule())));
         builder.CreateBr(exitFallThrough);
 
+
+        // here we check whether the control flow actually entered the loop or not?
+        // i.e., if the value of loopVar != uniqueLoopNumber that means the control
+        // did not entered the loop.
+        BasicBlock *loopEntryCheck = BasicBlock::Create(originalExitingBB->getContext(), "checkLoopEntry");
+        loopEntryCheck->insertInto(originalExitingBB->getParent(), exitFallThrough);
+        builder.SetInsertPoint(loopEntryCheck);
+        Value *cons = ConstantInt::get(IntegerType::getInt32Ty(C), uniqueLoopNumber);
+        // create a not equal comparision instruction.
+        Value *icmpNEq = builder.CreateICmpNE(loopLoadVal, cons);
+        // control did not enter the loop, so this is fine.
+        builder.CreateCondBr(icmpNEq, exitFallThrough, terminatingBB);
+
         // link the last BB to the check failed BB
         builder.SetInsertPoint(prevBB);
-        builder.CreateCondBr(prevBBICmd, exitFallThrough, terminatingBB);
+        // branch of check if the control actually entered the loop or not.
+        builder.CreateCondBr(prevBBICmd, exitFallThrough, loopEntryCheck);
 
         // update the original exit BB so that it jumps to our
         // series of newly inserted checks
@@ -354,6 +373,7 @@ public:
     }
 
     bool edited = false;
+    std::vector<unsigned> solomonCodes;
     errs() << TAG << "Instrumenting: " << F.getName() << "!\n";
 
     LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
@@ -365,20 +385,23 @@ public:
       {
         // for each loop create a new local variable.
         Value *loopVar = createNewLocalVariable(F);
-
-        // before entering the loop..set the value of the variable to 0
+        solomonCodes.clear();
+        // before entering the loop..set the value of the variable
+        // to a solomon code that indicates that the loop has been entered.
+        generateNumbersWithMaximumHamming(1, solomonCodes);
+        // this is a unique number that represents that control has entered the loop
+        unsigned uniqueLoopNumber = solomonCodes[0];
         std::set<BasicBlock*> entryBBs;
         entryBBs.clear();
         getEnteringBBs(lobj, entryBBs);
-        assert(!entryBBs.empty() && "There has to be en try BBs.");
-        resetValue(loopVar, entryBBs);
+        assert(!entryBBs.empty() && "There has to be entry BBs.");
+        resetValue(loopVar, uniqueLoopNumber,entryBBs);
 
         SmallVector<BasicBlock *, 32> exitBBs;
         exitBBs.clear();
         // get the exit basic blocks.
         lobj->getExitingBlocks(exitBBs);
 
-        std::vector<unsigned> solomonCodes;
         solomonCodes.clear();
         // get solomon codes for each of the exiting BBs
         generateNumbersWithMaximumHamming(exitBBs.size(), solomonCodes);
@@ -402,7 +425,7 @@ public:
         getExitBBCorrespondence(lobj, exitBBCorrespondence);
 
         // protect the loop exits.
-        protectLoopExits(exitBBCorrespondence, exitingBBCodes, loopVar);
+        protectLoopExits(exitBBCorrespondence, exitingBBCodes, loopVar, uniqueLoopNumber);
       }
     }
 
