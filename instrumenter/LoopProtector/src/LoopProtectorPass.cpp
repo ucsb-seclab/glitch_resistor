@@ -167,15 +167,7 @@ public:
    */
   bool getEnteringBBs(Loop* currLoop, std::set<BasicBlock*> &enteringBBs)
   {
-    BasicBlock *hdr = currLoop->getHeader();
-    for (auto it = pred_begin(hdr), et = pred_end(hdr); it != et; ++it)
-    {
-      BasicBlock* predecessor = *it;
-      if (!currLoop->contains(predecessor))
-      {
-        enteringBBs.insert(predecessor);
-      }
-    }
+    enteringBBs.insert(currLoop->getHeader());
     return !enteringBBs.empty();
   }
 
