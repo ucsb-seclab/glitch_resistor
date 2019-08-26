@@ -372,8 +372,9 @@ public:
       return false;
     }
 
+    srand(time(NULL));
+
     bool edited = false;
-    std::vector<unsigned> solomonCodes;
     errs() << TAG << "Instrumenting: " << F.getName() << "!\n";
 
     LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
@@ -385,12 +386,10 @@ public:
       {
         // for each loop create a new local variable.
         Value *loopVar = createNewLocalVariable(F);
-        solomonCodes.clear();
         // before entering the loop..set the value of the variable
-        // to a solomon code that indicates that the loop has been entered.
-        generateNumbersWithMaximumHamming(1, solomonCodes);
+        // to a random value that indicates that the loop has been entered.
         // this is a unique number that represents that control has entered the loop
-        unsigned uniqueLoopNumber = solomonCodes[0];
+        unsigned uniqueLoopNumber = (unsigned)rand();
         std::set<BasicBlock*> entryBBs;
         entryBBs.clear();
         getEnteringBBs(lobj, entryBBs);
@@ -402,10 +401,10 @@ public:
         // get the exit basic blocks.
         lobj->getExitingBlocks(exitBBs);
 
-        solomonCodes.clear();
+        /*solomonCodes.clear();
         // get solomon codes for each of the exiting BBs
         generateNumbersWithMaximumHamming(exitBBs.size(), solomonCodes);
-        assert(exitBBs.size() == solomonCodes.size()  && "Unable to get required number of solomon codes.");
+        assert(exitBBs.size() == solomonCodes.size()  && "Unable to get required number of solomon codes.");*/
         std::map<BasicBlock*, unsigned> exitingBBCodes;
         exitingBBCodes.clear();
         unsigned solIdx = 0;
@@ -413,9 +412,9 @@ public:
         // assign one code for each of the exiting BB
         for (auto currExitBB: exitBBs)
         {
-          exitingBBCodes[currExitBB] = solomonCodes[solIdx];
+          exitingBBCodes[currExitBB] = (unsigned)rand();
           // store the corresponding value into the loop local var.
-          storeValue(solomonCodes[solIdx], loopVar, currExitBB);
+          storeValue(exitingBBCodes[currExitBB], loopVar, currExitBB);
           solIdx++;
         }
 
