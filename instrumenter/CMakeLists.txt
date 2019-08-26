@@ -40,4 +40,5 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
 
 add_subdirectory(LoopProtector)
 add_subdirectory(DelayInjector)
+add_subdirectory(BranchProtector)
 add_subdirectory(IntegrityProtector)

@@ -16,6 +16,7 @@ const unsigned int delay_m = 2147483648; // 2³¹
 const unsigned  delay_a = 1103515245;
 const unsigned  delay_c = 12345;
 const unsigned int delay_max_len = 10000;
+
 const unsigned int delay_dont_run_prct = delay_m * .01; // %
 
 __attribute__((annotate("NoResistor"))) void seed_write() {
