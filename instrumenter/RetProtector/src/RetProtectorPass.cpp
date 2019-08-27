@@ -166,12 +166,21 @@ namespace GLitchPlease {
       //Find all returns of a constant 0
       for (User *U : zero->users()){
           Instruction *inst = dyn_cast<Instruction>(U);
-          if(!inst || !shouldInstrumentFunc(*(inst->getFunction())))
-            continue;
-          else if(ReturnInst *ri = dyn_cast<ReturnInst>(inst))
-             //check if address taken
-             if(!ri->getFunction()->hasAddressTaken())
-               rets.push_back(ri); 
+          if(!inst || !shouldInstrumentFunc(*(inst->getFunction()))) continue;
+          else if(ReturnInst *ri = dyn_cast<ReturnInst>(inst)) {
+             //check if address taken 
+            //ri->dump();
+            //const User *zed;
+            //errs() << "Address Taken: " << ri->getFunction()->hasAddressTaken(&zed) << "\n";
+            //const BitCastOperator *tmp = dyn_cast<BitCastOperator>(zed);
+            //if(tmp) {
+            //  tmp->dump();
+            //  for(const User *U2 : tmp->users())
+            //    U2->dump();
+            //}
+            //if(!ri->getFunction()->hasAddressTaken()) 
+              rets.push_back(ri); 
+          }
       }
 
       //Find All call instructions in the Module
@@ -188,6 +197,9 @@ namespace GLitchPlease {
         }
       }
 
+      errs() << "number of constant 0 returns: " << rets.size() << "\n";
+      errs() << "number of call instructions: " << calls.size() << "\n";
+      
       //For each return instruction, verify that 1) it is in a modifiable
       //function and 2) *every* call to it is in a modifiable function.
       vector<ReturnInst *> mod_rets;
@@ -206,34 +218,37 @@ namespace GLitchPlease {
       //Go over the returns, see if a call matches the function it's returning
       //from. If so, see if the call is directly used by a branch. If so, change
       //the value to something "hard to glitch".
-      vector<Instruction *> to_mod;
+      vector<User *> to_mod;
       for(ReturnInst *ri : mod_rets) {
         StringRef ret_name = ri->getFunction()->getName();
         to_mod.push_back(ri);
         bool shouldReplace = true;
         for (CallInst *ci : calls) {
-          if(ci->getFunction()->getName().equals(ret_name)){
+          if(ci->getCalledFunction()->getName().equals(ret_name)){
             for(User *U : ci->users()){
               //TODO: should verify that we are comparing against a constant ...
               if(isa<Instruction>(U) && !isa<CmpInst>(U)){
                 shouldReplace = false;
                 break;
               }
-              to_mod.push_back(ci);
+              to_mod.push_back(U);
             }
           } 
         }
         if(shouldReplace){
           //TODO: fix up this constant
           ConstantInt *glitch_resistant = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0x55555555);
-          for(Instruction *inst : to_mod) {
-            if(ReturnInst *ri = dyn_cast<ReturnInst>(inst)){
+          for(User *U : to_mod) {
+            U->dump();
+            if(ReturnInst *ri = dyn_cast<ReturnInst>(U)){
               ri->setOperand(0, glitch_resistant);
             }
-            else if(CmpInst *cmp = dyn_cast<CmpInst>(inst)){
+            else if(CmpInst *cmp = dyn_cast<CmpInst>(U)){
               int idx = 0;
               for(Use &U : cmp->operands()){
                 Value *v = U.get();
+                errs() << "CmpInst candidate to replace: ";
+                v->dump();
                 if(isa<ConstantInt>(v)){
                   cmp->setOperand(idx, glitch_resistant);
                   break;

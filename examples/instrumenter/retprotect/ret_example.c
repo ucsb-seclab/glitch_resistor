@@ -1,10 +1,10 @@
 #include<stdio.h>
 
-int a() {
+static int a() {
     printf("hello");
     return 0;
 }
-int b() {
+static int b() {
     printf("goodbye");
     return 1;
 }
