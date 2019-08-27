@@ -8,26 +8,28 @@ using namespace GLitchPlease;
 
 #define GPINTEGRITYSECTIONNAME "gpprotect.integrity"
 
-std::set<Value*>& ProtectedDataHandler::getToProtectDataElements() {
-  if(toProtectDataVars.empty()) {
-    for (auto &globV: m.getGlobalList()) {
+std::set<Value *> &ProtectedDataHandler::getToProtectDataElements() {
+  if (toProtectDataVars.empty()) {
+    for (auto &globV : m.getGlobalList()) {
       if (globV.hasName()) {
         std::string globName = globV.getName().str();
         // check if this variable needs to be protected?
-        if (toProtectGlobVarNames.find(globName) != toProtectGlobVarNames.end()) {
+        if (toProtectGlobVarNames.find(globName) !=
+            toProtectGlobVarNames.end()) {
           // check if this does not have its address taken
           if (!isAddressTaken(&globV)) {
             // if (Verbose) {
-              llvm::errs() << "[+] Global Variable:" << globName << " is selected to be protected.\n";
+            llvm::errs() << "[+] Global Variable: " << globName
+                         << " is selected to be protected.\n";
             // }
             toProtectDataVars.insert(&globV);
           } else {
             // requested a variable to be protected, but the variable
             // has its address taken
-            llvm::errs() << "[-] Global Variable:" << globName
-                         << " cannot be protected as its address has been taken.\n";
+            llvm::errs()
+                << "[-] Global Variable: " << globName
+                << " cannot be protected as its address has been taken.\n";
           }
-
         }
       }
     }
@@ -35,20 +37,20 @@ std::set<Value*>& ProtectedDataHandler::getToProtectDataElements() {
   return toProtectDataVars;
 }
 
-std::map<Value*, Value*>& ProtectedDataHandler::getShadowDataMap() {
+std::map<Value *, Value *> &ProtectedDataHandler::getShadowDataMap() {
   getToProtectDataElements();
-  if(shadowDataVars.empty() && !toProtectDataVars.empty()) {
+  if (shadowDataVars.empty() && !toProtectDataVars.empty()) {
     // ok, we need to create new shadow data vars.
-    for(auto currDVar: toProtectDataVars) {
+    for (auto currDVar : toProtectDataVars) {
       GlobalVariable *gVar = dyn_cast<GlobalVariable>(currDVar);
-      if(gVar) {
+      if (gVar) {
         std::string newGVarName = gVar->getName().str() + "_gpintegrity";
-        Constant *newIntegrityVal = m.getOrInsertGlobal(newGVarName, gVar->getType()->getPointerElementType());
+        Constant *newIntegrityVal = m.getOrInsertGlobal(
+            newGVarName, gVar->getType()->getPointerElementType());
         assert(newIntegrityVal && "Failed to insert a new global variable.");
         // if(Verbose) {
-          llvm::errs() << "[+] Created a new global variable:" <<
-                          newGVarName << " to protect:" <<
-                          gVar->getName().str() << "\n";
+        llvm::errs() << "[+] Created a new global variable:" << newGVarName
+                     << " to protect:" << gVar->getName().str() << "\n";
         // }
 
         GlobalVariable *newGlobVar = dyn_cast<GlobalVariable>(newIntegrityVal);
@@ -56,15 +58,17 @@ std::map<Value*, Value*>& ProtectedDataHandler::getShadowDataMap() {
         newGlobVar->setLinkage(gVar->getLinkage());
         // initialize this..only if we have initialize for
         // the source global variable.
-        if(gVar->hasInitializer()) {
+        if (gVar->hasInitializer()) {
           // set the section name.
           newGlobVar->setSection(GPINTEGRITYSECTIONNAME);
           // initialize it to zeros.
-          newGlobVar->setInitializer(ConstantAggregateZero::get(gVar->getType()->getPointerElementType()));
+          newGlobVar->setInitializer(ConstantAggregateZero::get(
+              gVar->getType()->getPointerElementType()));
         }
         shadowDataVars[currDVar] = newIntegrityVal;
       } else {
-        llvm::errs() << "[-] Cannot handle non-global value:" << *currDVar << "\n";
+        llvm::errs() << "[-] Cannot handle non-global value:" << *currDVar
+                     << "\n";
       }
     }
   }
