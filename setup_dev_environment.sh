@@ -13,6 +13,9 @@ if [ ! -d llvm-8.0.0.src/tools/clang ]; then
 	rm cfe-8.0.0.src.tar.xz
 fi
 
+# Install ninja
+brew install ninja
+
 mkdir -p llvm-8.0.0.obj
 cd llvm-8.0.0.obj
 cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="RISCV" ../llvm-8.0.0.src 
