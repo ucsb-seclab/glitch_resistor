@@ -1,2 +1,2 @@
-blah
+i
 gpprotect_struc
