@@ -4,8 +4,8 @@ obj = $(src:.c=.o)
 LDFLAGS = 
 
 example: $(obj)
-	$(CC) $(CC_FLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 .PHONY: clean
 clean:
-	rm -f $(obj) myprog
+	rm -f $(obj) example

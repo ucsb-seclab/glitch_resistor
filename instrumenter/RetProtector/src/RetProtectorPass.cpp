@@ -20,8 +20,10 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <set>
+#include <vector>
 
 using namespace llvm;
+using namespace std;
 
 #define DELAY_FUNC_NAME "gr_glitch_detected"
 
@@ -149,29 +151,105 @@ namespace GLitchPlease {
     }
 
     bool runOnModule(Module &M) override {
-      // Should we instrument this function?
-      //if(shouldInstrumentFunc(F)==false) {
-      //      return false;
-      //}
-
       // Place a call to our detection function after the return of every function
       bool edited = false;
-      
+     
+      //TODO: other bit sizes as well, but 32 seems to be the most common      
+      ConstantInt *zero = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
+
+      //TODO: Will likely need to handle invokes as well
+      vector<ReturnInst *> rets;
+      vector<CallInst *> calls;
+
+      M.dump();
+      errs() << "----------------------------------\n";
+      //Find all returns of a constant 0
+      for (User *U : zero->users()){
+          Instruction *inst = dyn_cast<Instruction>(U);
+          if(!inst || !shouldInstrumentFunc(*(inst->getFunction())))
+            continue;
+          else if(ReturnInst *ri = dyn_cast<ReturnInst>(inst))
+             //check if address taken
+             if(!ri->getFunction()->hasAddressTaken())
+               rets.push_back(ri); 
+      }
+
+      //Find All call instructions in the Module
+      for(auto it = M.begin(); it != M.end(); it++){
+        Function &F = *it;
+        for(BasicBlock &BB : F){
+          for(Instruction &I : BB){
+            Instruction *inst = &I;
+            if(CallInst *ci = dyn_cast<CallInst>(inst)){
+              if (ci->getCalledFunction())
+                calls.push_back(ci);
+            }
+          }
+        }
+      }
+
+      //For each return instruction, verify that 1) it is in a modifiable
+      //function and 2) *every* call to it is in a modifiable function.
+      vector<ReturnInst *> mod_rets;
+      for(ReturnInst *ri : rets){
+        bool mod = true;
+        StringRef ret_name = ri->getFunction()->getName();
+        for(CallInst *ci : calls){
+          //Note: already made sure it's a direct call when populating calls
+          Function *called = ci->getCalledFunction();
+          if(called->getName().equals(ret_name) && !shouldInstrumentFunc(*called))
+            mod = false;
+        }
+        if(mod) mod_rets.push_back(ri); 
+      }
+
+      //Go over the returns, see if a call matches the function it's returning
+      //from. If so, see if the call is directly used by a branch. If so, change
+      //the value to something "hard to glitch".
+      vector<Instruction *> to_mod;
+      for(ReturnInst *ri : mod_rets) {
+        StringRef ret_name = ri->getFunction()->getName();
+        to_mod.push_back(ri);
+        bool shouldReplace = true;
+        for (CallInst *ci : calls) {
+          if(ci->getFunction()->getName().equals(ret_name)){
+            for(User *U : ci->users()){
+              //TODO: should verify that we are comparing against a constant ...
+              if(isa<Instruction>(U) && !isa<CmpInst>(U)){
+                shouldReplace = false;
+                break;
+              }
+              to_mod.push_back(ci);
+            }
+          } 
+        }
+        if(shouldReplace){
+          //TODO: fix up this constant
+          ConstantInt *glitch_resistant = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0x55555555);
+          for(Instruction *inst : to_mod) {
+            if(ReturnInst *ri = dyn_cast<ReturnInst>(inst)){
+              ri->setOperand(0, glitch_resistant);
+            }
+            else if(CmpInst *cmp = dyn_cast<CmpInst>(inst)){
+              int idx = 0;
+              for(Use &U : cmp->operands()){
+                Value *v = U.get();
+                if(isa<ConstantInt>(v)){
+                  cmp->setOperand(idx, glitch_resistant);
+                  break;
+                }
+                idx++;
+              } 
+            }
+          }
+        }
+        to_mod.clear();
+      }
       //if(isFunctionSafeToModify(&F)) {
         //errs() << "\033[1;31m[GR/Timing]\033[0m Instrumenting: " << F.getName() << "!\n";
-        //auto &bb = F.getBasicBlockList().back();
-        //insertProtector(&bb.back(), true);
-      
-        ConstantInt *zero = ConstantInt::getFalse(M.getContext());
-        for (User *U : zero->users()){
-            Instruction *inst = dyn_cast<Instruction>(U);
-            if(!inst){
-                errs() << "[RetPro -- Error] ConstantInt used by non-instruction: " << U << "\n";
-            }
-            dbgs() << "[RetPro -- Warning] Unknown instruction using ConstantInt::0: " << inst << "\n";
-        }
-      //}
 
+      M.dump();
+      errs() << "\n\n\n";
       return edited;
     }
 

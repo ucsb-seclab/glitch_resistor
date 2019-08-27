@@ -10,6 +10,6 @@ int b() {
 }
 int main() {
     int i;
-    a();
-    b();
+    if(a())
+        b();
 }
