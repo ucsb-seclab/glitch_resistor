@@ -169,6 +169,11 @@ public:
       // check if the current instruction is already visited?
       if (std::find(allInstrs.begin(), allInstrs.end(), currInstr) ==
           allInstrs.end()) {
+
+        if (!canReplicate(currInstr)) {
+          if (Verbose)
+            errs() << TAG << "Skipping " << *currInstr << "\n";
+        }
         allInstrs.insert(allInstrs.begin(), currInstr);
         hasInstrInserted = true;
         if (canReplicateOperands(currInstr)) {
@@ -178,7 +183,6 @@ public:
             Value *currOp = currInstr->getOperand(i);
             if (Instruction *CI = dyn_cast<Instruction>(currOp)) {
               if (canReplicate(CI)) {
-                errs() << TAG << "Replicating " << *CI << "\n";
                 hasInstrInserted =
                     recursivelyGetInstructionsToReplicate(CI, allInstrs) ||
                     hasInstrInserted;
