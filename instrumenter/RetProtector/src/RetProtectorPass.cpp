@@ -161,8 +161,6 @@ namespace GLitchPlease {
       vector<ReturnInst *> rets;
       vector<CallInst *> calls;
 
-      M.dump();
-      errs() << "----------------------------------\n";
       //Find all returns of a constant 0
       for (User *U : zero->users()){
           Instruction *inst = dyn_cast<Instruction>(U);
@@ -197,9 +195,6 @@ namespace GLitchPlease {
         }
       }
 
-      errs() << "number of constant 0 returns: " << rets.size() << "\n";
-      errs() << "number of call instructions: " << calls.size() << "\n";
-      
       //For each return instruction, verify that 1) it is in a modifiable
       //function and 2) *every* call to it is in a modifiable function.
       vector<ReturnInst *> mod_rets;
@@ -239,7 +234,6 @@ namespace GLitchPlease {
           //TODO: fix up this constant
           ConstantInt *glitch_resistant = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0x55555555);
           for(User *U : to_mod) {
-            U->dump();
             if(ReturnInst *ri = dyn_cast<ReturnInst>(U)){
               ri->setOperand(0, glitch_resistant);
             }
@@ -247,9 +241,7 @@ namespace GLitchPlease {
               int idx = 0;
               for(Use &U : cmp->operands()){
                 Value *v = U.get();
-                errs() << "CmpInst candidate to replace: ";
-                v->dump();
-                if(isa<ConstantInt>(v)){
+                if(isa<ConstantInt>(v) && v == zero){
                   cmp->setOperand(idx, glitch_resistant);
                   break;
                 }
@@ -260,11 +252,8 @@ namespace GLitchPlease {
         }
         to_mod.clear();
       }
-      //if(isFunctionSafeToModify(&F)) {
-        //errs() << "\033[1;31m[GR/Timing]\033[0m Instrumenting: " << F.getName() << "!\n";
 
       M.dump();
-      errs() << "\n\n\n";
       return edited;
     }
 
