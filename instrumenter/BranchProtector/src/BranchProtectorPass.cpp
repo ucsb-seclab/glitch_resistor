@@ -173,6 +173,7 @@ public:
         if (!canReplicate(currInstr)) {
           if (Verbose)
             errs() << TAG << "Skipping " << *currInstr << "\n";
+          return hasInstrInserted;
         }
         allInstrs.insert(allInstrs.begin(), currInstr);
         hasInstrInserted = true;
