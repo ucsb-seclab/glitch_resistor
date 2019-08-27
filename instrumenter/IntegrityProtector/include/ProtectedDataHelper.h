@@ -48,6 +48,12 @@ namespace GLitchPlease {
      * @return true if taken else false
      */
     bool isAddressTaken(Value *toCheckValue);
+    /***
+     * Get constant zero for the provided type.
+     * @param targetType Type of the constant
+     * @return newly created constant.
+     */
+    Constant* getConstantZeroForType(Type *targetType);
     Module &m;
     // names of the global variables that need to be protected.
     std::set<std::string> &toProtectGlobVarNames;

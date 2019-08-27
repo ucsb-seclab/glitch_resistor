@@ -33,7 +33,7 @@ namespace GLitchPlease {
 
   cl::opt<std::string> GlobalsFile("globals",
                                    cl::desc("Path to the file containing global variable that need to be protected."),
-                                   cl::init("to_protect_globals.txt"),
+                                   cl::init("/Users/machiry/Projects/glitch_please_defense/firmware/stm32/test_firmware/to_protect_globals.txt"),
                                    cl::cat(GPOptions));
 
   bool readFileLines(std::string fileName, std::set<std::string> &allLines) {
