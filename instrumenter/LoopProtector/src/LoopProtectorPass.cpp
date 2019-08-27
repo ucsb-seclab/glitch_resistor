@@ -9,11 +9,7 @@
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/ValueSymbolTable.h>
-#include <iostream>
-#include <llvm/Analysis/CallGraph.h>
 #include <llvm/Analysis/LoopInfo.h>
-#include <llvm/Support/Debug.h>
-#include <llvm/Analysis/CFGPrinter.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/CommandLine.h>
@@ -22,7 +18,6 @@
 #include <set>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
-#include "Utils.h"
 
 using namespace llvm;
 
@@ -200,7 +195,7 @@ public:
    */
   void resetValue(Value* loopVar, unsigned resetVal, std::set<BasicBlock*> &targetBBs)
   {
-    // in each of the basic block..store 0
+    // in each of the basic block..store resetVal
     for (auto currBB: targetBBs)
     {
       storeValue(resetVal, loopVar, currBB);
@@ -400,10 +395,6 @@ public:
         // get the exit basic blocks.
         lobj->getExitingBlocks(exitBBs);
 
-        /*solomonCodes.clear();
-        // get solomon codes for each of the exiting BBs
-        generateNumbersWithMaximumHamming(exitBBs.size(), solomonCodes);
-        assert(exitBBs.size() == solomonCodes.size()  && "Unable to get required number of solomon codes.");*/
         std::map<BasicBlock*, unsigned> exitingBBCodes;
         exitingBBCodes.clear();
         unsigned solIdx = 0;
