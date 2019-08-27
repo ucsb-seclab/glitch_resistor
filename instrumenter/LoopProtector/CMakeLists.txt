@@ -1,4 +1,4 @@
-add_library(LoopProtector MODULE src/LoopProtectorPass.cpp src/Utils.cpp)
+add_library(LoopProtector MODULE src/LoopProtectorPass.cpp)
 
 include_directories(include)
 

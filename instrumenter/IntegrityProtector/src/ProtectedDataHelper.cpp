@@ -60,7 +60,8 @@ std::map<Value*, Value*>& ProtectedDataHandler::getShadowDataMap() {
           // set the section name.
           newGlobVar->setSection(GPINTEGRITYSECTIONNAME);
           // initialize it to zeros.
-          newGlobVar->setInitializer(ConstantAggregateZero::get(gVar->getType()->getPointerElementType()));
+          Constant *globInit = getConstantZeroForType(gVar->getType()->getPointerElementType());
+          newGlobVar->setInitializer(globInit);
         }
         shadowDataVars[currDVar] = newIntegrityVal;
       } else {
@@ -76,4 +77,18 @@ bool ProtectedDataHandler::isAddressTaken(Value *toCheckValue) {
   GlobalVariable *globVar = dyn_cast<GlobalVariable>(toCheckValue);
   // TODO: implement address taken detection mechanism.
   return globVar == nullptr;
+}
+
+Constant* ProtectedDataHandler::getConstantZeroForType(Type *targetType) {
+  Constant *toRet = nullptr;
+  if(targetType->isStructTy() || targetType->isArrayTy() || targetType->isVectorTy()) {
+    toRet = ConstantAggregateZero::get(targetType);
+  } else if(targetType->isIntegerTy()) {
+    toRet = ConstantInt::get(targetType, 0);
+  } else if(targetType->isFloatingPointTy()) {
+    toRet = ConstantFP::get(targetType, 0.0);
+  } else {
+    assert(false && "Unable to handle the global type");
+  }
+  return toRet;
 }
