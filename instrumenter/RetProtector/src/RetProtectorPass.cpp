@@ -38,7 +38,7 @@ public:
   Function *delayFunction;
   std::set<Function *> annotFuncs;
   std::string AnnotationString = "NoResistor";
-  std::string TAG = "\033[1;31m[GR/Loop]\033[0m ";
+  std::string TAG = "\033[1;31m[GR/Ret]\033[0m ";
   bool Verbose = false;
   RetProtectorPass() : ModulePass(ID) { this->delayFunction = nullptr; }
 
