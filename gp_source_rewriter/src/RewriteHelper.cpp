@@ -4,6 +4,7 @@
 
 #include "llvm/Support/raw_ostream.h"
 #include <string>
+#include <unistd.h>
 
 #include "RewriteHelper.h"
 #include "Utils.h"
@@ -135,7 +136,7 @@ static bool canWrite(std::string filePath, std::set<std::string> &iof,
  * @param Files set of file ids whose buffer should be written to files.
  * @param InOutFiles set of files provided on the command line.
  * @param BaseDir base directory of the sources we are converting.
- * @param OutputPostfix the postfix string that should be used to write files
+ * @param OutputPostfix the postfix string that is used for backups
  * out.
  */
 static void emit(Rewriter &R, ASTContext &C, std::set<FileID> &Files,
@@ -163,25 +164,34 @@ static void emit(Rewriter &R, ASTContext &C, std::set<FileID> &Files,
         if (const FileEntry *FE = SM.getFileEntryForID(F)) {
           assert(FE->isValid());
 
-          // Produce a path/file name for the rewritten source file.
+          // Produce a path/file backup for the rewritten source file.
           // That path should be the same as the old one, with a
-          // suffix added between the file name and the extension.
-          // For example \foo\bar\a.c should become \foo\bar\a.gplease.c
+          // suffix added to the file name.
+          // For example \foo\bar\a.c should become \foo\bar\a.c.gplease
           // if the OutputPostfix parameter is "gplease" .
 
           std::string pfName = sys::path::filename(FE->getName()).str();
           std::string dirName = sys::path::parent_path(FE->getName()).str();
-          std::string fileName =
-              sys::path::remove_leading_dotslash(pfName).str();
-          std::string ext = sys::path::extension(fileName).str();
-          std::string stem = sys::path::stem(fileName).str();
-          std::string nFileName = stem + "." + OutputPostfix + ext;
-          std::string nFile = nFileName;
-          if (dirName.size() > 0)
-            nFile = dirName + sys::path::get_separator().str() + nFileName;
+          // Let's rename the file
+          std::string newname = pfName + "." + OutputPostfix;
 
-          // Write this file out if it was specified as a file on the command
-          // line.
+          if (dirName.size() > 0) {
+            pfName = dirName + sys::path::get_separator().str() + pfName;
+            newname = dirName + sys::path::get_separator().str() + newname;
+          }
+
+          if (access(newname.c_str(), F_OK) != -1) {
+            errs() << TAG << "Backup file already exists! (" << newname
+                   << ")\n";
+            return;
+          }
+          if (std::rename(pfName.c_str(), newname.c_str())) {
+            errs() << TAG << "Could not create backup (" << pfName << " -> "
+                   << newname << ")\n";
+            return;
+          }
+
+          // Write this file out to a file with the original filename
           SmallString<254> feAbs(FE->getName());
           std::string feAbsS = "";
           if (std::error_code ec = sys::fs::make_absolute(feAbs)) {
@@ -192,14 +202,14 @@ static void emit(Rewriter &R, ASTContext &C, std::set<FileID> &Files,
 
           if (canWrite(feAbsS, InOutFiles, base)) {
             std::error_code EC;
-            raw_fd_ostream out(nFile, EC, sys::fs::F_None);
+            raw_fd_ostream out(pfName, EC, sys::fs::F_None);
 
             if (!EC) {
               if (Verbose)
-                outs() << "writing out " << nFile << "\n";
+                outs() << "writing out " << pfName << "\n";
               B->write(out);
             } else
-              errs() << "could not open file " << nFile << "\n";
+              errs() << "could not open file " << pfName << "\n";
             // This is awkward. What to do? Since we're iterating,
             // we could have created other files successfully. Do we go back
             // and erase them? Is that surprising? For now, let's just keep

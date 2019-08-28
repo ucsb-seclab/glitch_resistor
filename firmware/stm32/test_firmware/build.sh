@@ -9,5 +9,5 @@ export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/BranchPr
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/LoopProtector/libLoopProtector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/IntegrityProtector/libIntegrityProtector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/RetProtector/libRetProtector.so"
-export GR_ENUM_FLAGS="-extra-arg-before=-w --allinit -output-postfix gr"
+export GR_ENUM_FLAGS="-extra-arg-before=-w --allinit -output-postfix bak"
 make
