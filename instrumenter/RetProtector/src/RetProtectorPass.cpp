@@ -29,9 +29,6 @@ namespace GLitchPlease {
 
 static cl::OptionCategory GPOptions("retprotector options");
 
-cl::opt<bool> Verbose("verbose", cl::desc("Print verbose information"),
-                      cl::init(false), cl::cat(GPOptions));
-
 /***
  * The main pass.
  */
@@ -42,7 +39,7 @@ public:
   std::set<Function *> annotFuncs;
   std::string AnnotationString = "NoResistor";
   std::string TAG = "\033[1;31m[GR/Loop]\033[0m ";
-
+  bool Verbose = false;
   RetProtectorPass() : ModulePass(ID) { this->delayFunction = nullptr; }
 
   ~RetProtectorPass() {}
