@@ -1,6 +1,10 @@
 #!/bin/sh
 
-cp -r gp_source_rewriter llvm-8.0.0.src/tools/clang/tools/
+#cp -r gp_source_rewriter llvm-8.0.0.src/tools/clang/tools/
+
+pushd llvm-8.0.0.src/tools/clang/tools/
+ln -sf ../../../../gp_source_rewriter .
+popd
 
 if ! grep -q "gp_source_rewriter" llvm-8.0.0.src/tools/clang/tools/CMakeLists.txt; then
 	sed -i '' '/add_clang_subdirectory(clang-format)/ a\

@@ -154,6 +154,7 @@ LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BU
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin
 
 
+GR_ENUM_ARG := $(addprefix -extra-arg-before=,${CFLAGS})
 #######################################
 # build the application
 #######################################
@@ -165,6 +166,7 @@ OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
 vpath %.s $(sort $(dir $(ASM_SOURCES)))
 
 $(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR) 
+	gp-source-rewriter $(GR_ENUM_ARG) $(GR_ENUM_FLAGS) $<
 	$(LLVM_CC) -c -target arm-none-eabi $(CLANG_FLAGS) $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)

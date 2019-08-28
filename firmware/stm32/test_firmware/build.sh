@@ -9,4 +9,5 @@ export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/DelayInj
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/BranchProtector/libBranchProtector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/LoopProtector/libLoopProtector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/IntegrityProtector/libIntegrityProtector.so"
+export GR_ENUM_FLAGS="-extra-arg-before=-w --allinit -output-postfix gr"
 make
