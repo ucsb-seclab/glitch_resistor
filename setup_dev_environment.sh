@@ -6,17 +6,21 @@ if [ ! -d llvm-8.0.0.src ]; then
 	rm llvm-8.0.0.src.tar.xz
 fi
 
-if [ ! -d cfe-8.0.0.src ]; then
+if [ ! -d llvm-8.0.0.src/tools/clang ]; then
 	curl -L -O http://llvm.org/releases/8.0.0/cfe-8.0.0.src.tar.xz
 	tar xvf cfe-8.0.0.src.tar.xz
 	mv cfe-8.0.0.src llvm-8.0.0.src/tools/clang
 	rm cfe-8.0.0.src.tar.xz
 fi
 
+# Install ninja
+brew install ninja
+
 mkdir -p llvm-8.0.0.obj
 cd llvm-8.0.0.obj
-cmake -DCMAKE_BUILD_TYPE=Debug ../llvm-8.0.0.src 
-make -j8 
+cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="RISCV" ../llvm-8.0.0.src 
+#make -j8 
+cmake --build .
 cd ..
 
 echo "export LLVM_SRC=$PWD/llvm-8.0.0.src" > .envrc

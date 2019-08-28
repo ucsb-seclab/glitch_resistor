@@ -2,8 +2,8 @@
 // Created by machiry on 7/21/19.
 //
 
-#include <string>
 #include "llvm/Support/raw_ostream.h"
+#include <string>
 
 #include "RewriteHelper.h"
 #include "Utils.h"
@@ -11,6 +11,8 @@
 using namespace clang;
 using namespace llvm;
 using namespace GLitchPlease;
+
+std::string TAG = "\033[1;31m[GR/Enum]\033[0m ";
 
 /**
  *  Check if we can rewrite the provided source range.
@@ -28,22 +30,25 @@ static bool canRewrite(Rewriter &R, SourceRange &SR) {
 class EnumDetector : public RecursiveASTVisitor<EnumDetector> {
 public:
   explicit EnumDetector(ASTContext *Context, GlobalProgramInfo &I)
-    : Context(Context), Info(I) {
+      : Context(Context), Info(I) {
     foundEnums.clear();
     foundEnumFields.clear();
   }
 
   bool VisitTagDecl(TagDecl *tagDecl) {
-    if(tagDecl->isEnum()) {
+    if (tagDecl->isEnum()) {
       // is this enum?
-      PersistentSourceLoc enumPSL = PersistentSourceLoc::mkPSL(tagDecl, *Context);
-      SourceWithName enumKey = GlobalProgramInfo::getSourceNameKey(enumPSL, tagDecl->getName());
+      PersistentSourceLoc enumPSL =
+          PersistentSourceLoc::mkPSL(tagDecl, *Context);
+      SourceWithName enumKey =
+          GlobalProgramInfo::getSourceNameKey(enumPSL, tagDecl->getName());
       foundEnums.insert(enumKey);
       EnumDecl *ED = dyn_cast<EnumDecl>(tagDecl);
-      for (auto em: ED->enumerators()) {
+      for (auto em : ED->enumerators()) {
         // get all the fields and store them.
         PersistentSourceLoc fieldPSL = PersistentSourceLoc::mkPSL(em, *Context);
-        SourceWithName fldKey = GlobalProgramInfo::getSourceNameKey(fieldPSL, em->getName());
+        SourceWithName fldKey =
+            GlobalProgramInfo::getSourceNameKey(fieldPSL, em->getName());
         foundEnumFields[fldKey] = em;
       }
     }
@@ -52,11 +57,13 @@ public:
 
   std::set<SourceWithName> &getFoundEnums() { return foundEnums; }
 
-  std::map<SourceWithName, EnumConstantDecl*> &getFoundEnumFields() { return foundEnumFields; }
+  std::map<SourceWithName, EnumConstantDecl *> &getFoundEnumFields() {
+    return foundEnumFields;
+  }
 
 private:
   std::set<SourceWithName> foundEnums;
-  std::map<SourceWithName, EnumConstantDecl*> foundEnumFields;
+  std::map<SourceWithName, EnumConstantDecl *> foundEnumFields;
   ASTContext *Context;
   GlobalProgramInfo &Info;
 };
@@ -66,13 +73,15 @@ private:
  *  The check is based on the base-directory.
  *  All the files inside the base-directory are re-writable.
  *
- *  This is to avoid rewriting enums defined in default header files i.e., stdio.h
+ *  This is to avoid rewriting enums defined in default header files i.e.,
+ * stdio.h
  * @param filePath file path of the file to be rewritten.
  * @param iof  input files provided on the command line.
  * @param b base-directory.
  * @return true if this can be rewritten else false.
  */
-static bool canWrite(std::string filePath, std::set<std::string> &iof, std::string b) {
+static bool canWrite(std::string filePath, std::set<std::string> &iof,
+                     std::string b) {
   // Was this file explicitly provided on the command line?
   if (iof.count(filePath) > 0)
     return true;
@@ -126,7 +135,8 @@ static bool canWrite(std::string filePath, std::set<std::string> &iof, std::stri
  * @param Files set of file ids whose buffer should be written to files.
  * @param InOutFiles set of files provided on the command line.
  * @param BaseDir base directory of the sources we are converting.
- * @param OutputPostfix the postfix string that should be used to write files out.
+ * @param OutputPostfix the postfix string that should be used to write files
+ * out.
  */
 static void emit(Rewriter &R, ASTContext &C, std::set<FileID> &Files,
                  std::set<std::string> &InOutFiles, std::string &BaseDir,
@@ -161,7 +171,8 @@ static void emit(Rewriter &R, ASTContext &C, std::set<FileID> &Files,
 
           std::string pfName = sys::path::filename(FE->getName()).str();
           std::string dirName = sys::path::parent_path(FE->getName()).str();
-          std::string fileName = sys::path::remove_leading_dotslash(pfName).str();
+          std::string fileName =
+              sys::path::remove_leading_dotslash(pfName).str();
           std::string ext = sys::path::extension(fileName).str();
           std::string stem = sys::path::stem(fileName).str();
           std::string nFileName = stem + "." + OutputPostfix + ext;
@@ -171,7 +182,7 @@ static void emit(Rewriter &R, ASTContext &C, std::set<FileID> &Files,
 
           // Write this file out if it was specified as a file on the command
           // line.
-          SmallString<254>  feAbs(FE->getName());
+          SmallString<254> feAbs(FE->getName());
           std::string feAbsS = "";
           if (std::error_code ec = sys::fs::make_absolute(feAbs)) {
             if (Verbose)
@@ -179,7 +190,7 @@ static void emit(Rewriter &R, ASTContext &C, std::set<FileID> &Files,
           } else
             feAbsS = sys::path::remove_leading_dotslash(feAbs.str());
 
-          if(canWrite(feAbsS, InOutFiles, base)) {
+          if (canWrite(feAbsS, InOutFiles, base)) {
             std::error_code EC;
             raw_fd_ostream out(nFile, EC, sys::fs::F_None);
 
@@ -187,8 +198,7 @@ static void emit(Rewriter &R, ASTContext &C, std::set<FileID> &Files,
               if (Verbose)
                 outs() << "writing out " << nFile << "\n";
               B->write(out);
-            }
-            else
+            } else
               errs() << "could not open file " << nFile << "\n";
             // This is awkward. What to do? Since we're iterating,
             // we could have created other files successfully. Do we go back
@@ -200,7 +210,7 @@ static void emit(Rewriter &R, ASTContext &C, std::set<FileID> &Files,
 
 void RewriteConsumer::HandleTranslationUnit(ASTContext &Context) {
 
-  std::map<EnumConstantDecl*, std::string> rewriteContentMap;
+  std::map<EnumConstantDecl *, std::string> rewriteContentMap;
   rewriteContentMap.clear();
 
   Rewriter R(Context.getSourceManager(), Context.getLangOpts());
@@ -215,8 +225,8 @@ void RewriteConsumer::HandleTranslationUnit(ASTContext &Context) {
   auto &foundEnumFields = ED.getFoundEnumFields();
 
   // 2. check if any of the identified enums needs to be rewritten.
-  for(auto &fldConstant: Info.getFieldConstantMap()) {
-    if(foundEnumFields.find(fldConstant.first) != foundEnumFields.end()) {
+  for (auto &fldConstant : Info.getFieldConstantMap()) {
+    if (foundEnumFields.find(fldConstant.first) != foundEnumFields.end()) {
       EnumConstantDecl *enumDecl = foundEnumFields[fldConstant.first];
       std::string valString = std::to_string(fldConstant.second);
       std::string toReplace = enumDecl->getNameAsString() + " = " + valString;
@@ -233,6 +243,9 @@ void RewriteConsumer::HandleTranslationUnit(ASTContext &Context) {
       errs() << "Replacing type of decl:\n";
       D->dump();
       errs() << "with " << N.second << "\n";
+    } else {
+      errs() << TAG << "Replaced " << N.first->getNameAsString() << " with "
+             << N.second << "\n";
     }
 
     // Get a FullSourceLoc for the start location and add it to the

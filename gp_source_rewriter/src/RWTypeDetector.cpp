@@ -2,13 +2,13 @@
 // Created by machiry at the beginning of time.
 //
 #include "clang/AST/ASTConsumer.h"
+#include "clang/AST/Decl.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/Type.h"
-#include "clang/AST/Decl.h"
 
+#include "GlobalProgramInfo.h"
 #include "PersistentSourceLoc.h"
 #include "RWTypeDetector.h"
-#include "GlobalProgramInfo.h"
 #include "Utils.h"
 
 using namespace GLitchPlease;
@@ -18,45 +18,50 @@ using namespace llvm;
 /***
  * This is an AST Visitor that identifies the type to rewrite.
  */
-class RWTypeDetectorVisitor : public RecursiveASTVisitor<RWTypeDetectorVisitor> {
+class RWTypeDetectorVisitor
+    : public RecursiveASTVisitor<RWTypeDetectorVisitor> {
 public:
   explicit RWTypeDetectorVisitor(ASTContext *Context, GlobalProgramInfo &I)
-    : Context(Context), Info(I) {}
+      : Context(Context), Info(I) {}
 
   bool VisitTagDecl(TagDecl *tagDecl) {
-    if(tagDecl->isEnum()) {
-      PersistentSourceLoc enumPSL = PersistentSourceLoc::mkPSL(tagDecl, *Context);
+    if (tagDecl->isEnum()) {
+      PersistentSourceLoc enumPSL =
+          PersistentSourceLoc::mkPSL(tagDecl, *Context);
       EnumDecl *ED = dyn_cast<EnumDecl>(tagDecl);
-      std::set<EnumConstantDecl*> toReplace;
+      std::set<EnumConstantDecl *> toReplace;
       toReplace.clear();
       bool needToReplace = false;
       bool hasAtLeastOneInit = false;
-      for(auto em: ED->enumerators()) {
+      for (auto em : ED->enumerators()) {
         EnumConstantDecl *enumMem = em;
         toReplace.insert(enumMem);
-        if(needToReplace) {
+        if (needToReplace) {
           continue;
         }
-        if(!AllInitializers) {
+        if (!AllInitializers) {
           needToReplace = (enumMem->getInitExpr() == nullptr);
         } else {
-          hasAtLeastOneInit = (enumMem->getInitExpr() != nullptr) || hasAtLeastOneInit;
+          hasAtLeastOneInit =
+              (enumMem->getInitExpr() != nullptr) || hasAtLeastOneInit;
         }
       }
 
-      if(AllInitializers) {
+      if (AllInitializers) {
         needToReplace = !hasAtLeastOneInit;
       }
 
-      if(needToReplace) {
-        SourceWithName enumKey = GlobalProgramInfo::getSourceNameKey(enumPSL, tagDecl->getName());
-        for (auto em: toReplace) {
-          PersistentSourceLoc fieldPSL = PersistentSourceLoc::mkPSL(em, *Context);
-          SourceWithName fldKey = GlobalProgramInfo::getSourceNameKey(fieldPSL, em->getName());
+      if (needToReplace) {
+        SourceWithName enumKey =
+            GlobalProgramInfo::getSourceNameKey(enumPSL, tagDecl->getName());
+        for (auto em : toReplace) {
+          PersistentSourceLoc fieldPSL =
+              PersistentSourceLoc::mkPSL(em, *Context);
+          SourceWithName fldKey =
+              GlobalProgramInfo::getSourceNameKey(fieldPSL, em->getName());
           Info.insertEnumFieldToChange(enumKey, fldKey);
         }
       }
-
     }
     return true;
   }
