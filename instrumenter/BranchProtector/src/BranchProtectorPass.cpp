@@ -407,6 +407,9 @@ public:
         if (Verbose)
           dbgs() << TAG << bb << "\n";
       }
+    } else {
+      if (Verbose)
+        errs() << TAG << "Cannot modify: " << F.getName() << "\n";
     }
 
     return edited;
