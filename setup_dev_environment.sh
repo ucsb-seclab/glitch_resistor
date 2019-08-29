@@ -13,6 +13,19 @@ if [ ! -d llvm-8.0.0.src/tools/clang ]; then
 	rm cfe-8.0.0.src.tar.xz
 fi
 
+# Link our source rewriter
+pushd llvm-8.0.0.src/tools/clang/tools/
+ln -sf ../../../../gp_source_rewriter .
+popd
+
+# Add it to CMake
+if ! grep -q "gp_source_rewriter" llvm-8.0.0.src/tools/clang/tools/CMakeLists.txt; then
+        sed -i '' '/add_clang_subdirectory(clang-format)/ a\
+add_clang_subdirectory(gp_source_rewriter)\
+' llvm-8.0.0.src/tools/clang/tools/CMakeLists.txt
+fi
+
+
 # Install ninja
 brew install ninja
 
