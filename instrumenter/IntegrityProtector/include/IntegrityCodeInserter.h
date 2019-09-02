@@ -54,6 +54,33 @@ namespace GLitchPlease {
      * @return true if the insertion is successful else false.
      */
     bool replicateAndIntegrityProtect(Value *srcInstr, Value *srcIntInstr);
+
+    /***
+     *  Insert a cast from srcPtr to void* at the location indicated by the builder.
+     *
+     * @param srcPtr Pointer that needs to be casted.
+     * @param builder Builder where the instruction should be inserted.
+     * @return Pointer to the inserted cast.
+     */
+    Value* insertVoidPtrCast(Value *srcPtr, IRBuilder<> &builder);
+
+    /***
+     * Create a new local variable of provided type in srcFunction.
+     * @param srcFunction Function in which the variable needs to be created.
+     * @param varType Type of the local variable.
+     * @return Pointer to the newly created variable.
+     */
+    Value* createNewLocalVar(Function *srcFunction, Type *varType);
+
+    /***
+     *  This function protects the provided variable used as an argument to a call
+     *  instruction with integrity protection.
+     * @param srcInstr original variable.
+     * @param srcIntInstr Integerity protect copy.
+     * @param CI Call instruction that is using srcInstr
+     * @return true if the protection is successful else false.
+     */
+    bool protectCallInstr(Value *srcInstr, Value *srcIntInstr, CallInst *CI);
   };
 }
 

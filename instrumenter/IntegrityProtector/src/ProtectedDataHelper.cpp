@@ -84,11 +84,11 @@ bool ProtectedDataHandler::isAddressTaken(Value *toCheckValue) {
 
 Constant* ProtectedDataHandler::getConstantZeroForType(Type *targetType) {
   Constant *toRet = nullptr;
-  if(targetType->isStructTy() || targetType->isArrayTy() || targetType->isVectorTy()) {
+  if (targetType->isStructTy() || targetType->isArrayTy() || targetType->isVectorTy()) {
     toRet = ConstantAggregateZero::get(targetType);
-  } else if(targetType->isIntegerTy()) {
+  } else if (targetType->isIntegerTy()) {
     toRet = ConstantInt::get(targetType, 0);
-  } else if(targetType->isFloatingPointTy()) {
+  } else if (targetType->isFloatingPointTy()) {
     toRet = ConstantFP::get(targetType, 0.0);
   } else {
     assert(false && "Unable to handle the global type");
