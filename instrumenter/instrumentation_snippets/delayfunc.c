@@ -17,7 +17,7 @@ const unsigned delay_a = 1103515245;
 const unsigned delay_c = 12345;
 const unsigned int delay_max_len = 10000;
 
-const unsigned int delay_dont_run_prct = delay_m * .01; // %
+const unsigned int delay_run_prct = delay_m * .9; // %
 
 void seed_write() {
   // Implement delay_a function to save delay_seed to non-volatile memory
@@ -35,7 +35,7 @@ __attribute__((annotate("NoDelay"))) void gpdelay() {
   delay_seed = (delay_a * delay_seed + delay_c) % delay_m;
 
   // Don't always execute loop
-  if (delay_seed < delay_dont_run_prct) {
+  if (delay_seed < delay_run_prct) {
     // Ensure that only loop delay_a maximum number of times (even delay_a few
     // instructions can throw off delay_a glitch)
     unsigned int loop_len = delay_seed % delay_max_len;
