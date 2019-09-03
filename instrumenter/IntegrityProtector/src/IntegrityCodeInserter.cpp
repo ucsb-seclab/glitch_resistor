@@ -8,8 +8,8 @@ using namespace GLitchPlease;
 
 bool IntegrityCodeInserter::protectData(Value *src, Value *srcInt) {
   assert(src && srcInt && "Data items to change cannot be NULL");
-  if(GlobalVariable *srcGlob = dyn_cast<GlobalVariable>(src)) {
-    if(GlobalVariable *srcIntGlob = dyn_cast<GlobalVariable>(srcInt)) {
+  if (GlobalVariable *srcGlob = dyn_cast<GlobalVariable>(src)) {
+    if (GlobalVariable *srcIntGlob = dyn_cast<GlobalVariable>(srcInt)) {
       return replicateAndIntegrityProtect(srcGlob, srcIntGlob);
     }
   }
@@ -52,23 +52,23 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
       std::vector<Value*> arrIdxVals;
       arrIdxVals.clear();
       bool pointerOpFound = false;
-      for(unsigned i=0; i< srcGEP->getNumOperands(); i++) {
+      for (unsigned i=0; i< srcGEP->getNumOperands(); i++) {
         Value *currOp = srcGEP->getOperand(i);
         // Is this the src pointer operand? if yes, skip it.
-        if(currOp != srcGEP->getPointerOperand()) {
+        if (currOp != srcGEP->getPointerOperand()) {
           arrIdxVals.push_back(currOp);
         } else {
           pointerOpFound = true;
         }
       }
 
-      if(!pointerOpFound) {
+      if (!pointerOpFound) {
         llvm::errs() << "[-] Unable to handle GEP instruction:" << *srcGEP << "\n";
       }
       assert(pointerOpFound && "Expected a GEP instruction to find a pointer but did not find one.");
       Instruction *targetSrcIntr = nullptr;
 
-      for(auto U : srcGEP->users()) {
+      for (auto U : srcGEP->users()) {
         if (auto I = dyn_cast<Instruction>(U)) {
           targetSrcIntr = I;
           break;
@@ -89,7 +89,7 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
     }
 
     // if this is used in a load instruction?
-    if(auto srcLoad = dyn_cast<LoadInst>(U)) {
+    if (auto srcLoad = dyn_cast<LoadInst>(U)) {
       // Okay, here we need to insert the integrity load
       assert(srcLoad->getPointerOperand() == srcInstr &&
              "Sanity that the load instruction is using the src operand");
@@ -101,21 +101,19 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
       targetInsertPoint++;
       IRBuilder<> builder(&(*targetInsertPoint));
 
-      Value *srcIntBC = builder.CreatePointerCast(srcIntInstr,
-                                                  Type::getInt8PtrTy(m.getContext()), "loadgpicast");
-      Value *srcBC = builder.CreatePointerCast(srcInstr,
-                                               Type::getInt8PtrTy(m.getContext()), "loadgpocast");
+      Value *srcIntBC = insertVoidPtrCast(srcIntInstr, builder);
+      Value *srcBC = insertVoidPtrCast(srcInstr, builder);
 
       // Insert a call to the integrity checking function.
       Value *arguments[] = {srcBC, srcIntBC};
       Value *newVal = builder.CreateCall(targetFunc, arguments, "ReadGPValue");
 
       // if we are loading a pointer? we need to convert into correct type
-      if(srcLoad->getType()->isPointerTy()) {
+      if (srcLoad->getType()->isPointerTy()) {
         newVal = builder.CreatePointerCast(newVal, srcLoad->getType(), "gpConToOrPtr");
       }
 
-      for(auto loadUse : srcLoad->users()) {
+      for (auto loadUse : srcLoad->users()) {
         loadUse->replaceUsesOfWith(srcLoad, newVal);
       }
 
@@ -127,7 +125,7 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
     }
 
     // if this is used in a store instruction?
-    if(auto srcStore = dyn_cast<StoreInst>(U)) {
+    if (auto srcStore = dyn_cast<StoreInst>(U)) {
       assert(srcStore->getPointerOperand() == srcInstr &&
              "Sanity that the store instruction is using the src operand");
       // get the value to store.
@@ -137,15 +135,12 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
       IRBuilder<> builder(&(*targetInsertPoint));
       // Are we storing a pointer? then convert into void*
       if(toStoreValue->getType()->isPointerTy()) {
-        toStoreValue = builder.CreatePointerCast(toStoreValue,
-                                                 Type::getInt8PtrTy(m.getContext()), "storegpocast");
+        toStoreValue = insertVoidPtrCast(toStoreValue, builder);
       }
 
       // convert the pointers into void*
-      Value *srcIntBC = builder.CreatePointerCast(srcIntInstr,
-                                                  Type::getInt8PtrTy(m.getContext()), "storegpicast");
-      Value *srcBC = builder.CreatePointerCast(srcInstr,
-                                               Type::getInt8PtrTy(m.getContext()), "storegpocast");
+      Value *srcIntBC = insertVoidPtrCast(srcIntInstr, builder);
+      Value *srcBC = insertVoidPtrCast(srcIntInstr, builder);
 
       // Insert a call to the integrity checking write function.
       Value *arguments[] = {srcBC, srcIntBC, toStoreValue};
@@ -158,8 +153,34 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
       // Similar to the load, no need to propagate this information.
       continue;
     }
+    if(protectCallInstr(srcInstr, srcIntInstr, dyn_cast<CallInst>(U))) {
+      continue;
+    }
 
-    if(Instruction *UI = dyn_cast<Instruction>(U)) {
+    if(BitCastOperator *BCO = dyn_cast<BitCastOperator>(U)) {
+
+      Instruction *targetSrcIntr = nullptr;
+
+      for (auto U : BCO->users()) {
+        if (auto I = dyn_cast<Instruction>(U)) {
+          targetSrcIntr = I;
+          break;
+        }
+      }
+
+      // next set up the insertion point to be right after the original instruction.
+      auto targetInsertPoint = targetSrcIntr->getIterator();
+      targetInsertPoint++;
+      IRBuilder<> builder(&(*targetInsertPoint));
+
+      Value *integrityCastInstr = builder.CreateBitCast(srcIntInstr, BCO->getDestTy(), "gpintCast");
+
+      replicateAndIntegrityProtect(BCO, integrityCastInstr);
+      continue;
+    }
+
+
+    if (Instruction *UI = dyn_cast<Instruction>(U)) {
       llvm::errs() << "[-] Do not know how to handle the instruction:" << *UI << "\n";
     } else {
       llvm::errs() << "[-] Not an instruction:" << *U << "\n";
@@ -170,4 +191,88 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
 
   }
   return true;
+}
+
+Value* IntegrityCodeInserter::createNewLocalVar(Function *srcFunction, Type *varType) {
+  IRBuilder<> builder(&(*(srcFunction->getEntryBlock().getFirstInsertionPt())));
+  AllocaInst *newAlloca = builder.CreateAlloca(varType, nullptr, "intProtectTmp");
+  return newAlloca;
+}
+
+bool IntegrityCodeInserter::protectCallInstr(Value *srcInstr, Value *srcIntInstr, CallInst *CI) {
+  bool isHandled = false;
+  if (CI != nullptr) {
+    Function *calleeFunction = CI->getFunction();
+    Function *calledFunc = CI->getCalledFunction();
+    auto instrIt = CI->getIterator();
+    instrIt++;
+    IRBuilder<> builder(&(*instrIt));
+    // This function has name and it is an external function.
+    if (calledFunc != nullptr && calledFunc->hasName() && calledFunc->isDeclaration()) {
+      std::string funcName = calledFunc->getName().str();
+      // Is this a scanf function?
+      if (funcName.find("scanf") != std::string::npos) {
+        assert(srcInstr->getType()->isPointerTy() && "We are passing non-pointer argument to scanf. This is strange.");
+        PointerType *srcIntType = dyn_cast<PointerType>(srcInstr->getType());
+        // We are storing into the srcInstr
+        // create a tmp variable and read into that temp variable.
+        Value *tmpVariable = createNewLocalVar(calleeFunction, srcIntType->getPointerElementType());
+        CI->replaceUsesOfWith(srcInstr, tmpVariable);
+
+        // Now try to store from tmp into the protected variable.
+        // first get the number of bytes to store.
+        // first prepare arguments.
+        DataLayout DL(&m);
+        unsigned typeSize = DL.getTypeStoreSize(srcIntType->getPointerElementType());
+        Value *srcVoidPtr = insertVoidPtrCast(srcInstr, builder);
+        Value *srcIntVoidPtr = insertVoidPtrCast(srcIntInstr, builder);
+        Value *tmpVoidPtr = insertVoidPtrCast(tmpVariable, builder);
+        Value *sizeToWrite = ConstantInt::get(IntegerType::getInt32Ty(m.getContext()), typeSize);
+        Function *targetIntWriteFunction = fetchHelper.getWriteFunction();
+        Value *arguments[] = {srcVoidPtr, srcIntVoidPtr, tmpVoidPtr, sizeToWrite};
+        // insert the call.
+        builder.CreateCall(targetIntWriteFunction, arguments);
+        isHandled = true;
+
+      } else if (funcName.find("memcpy") != std::string::npos) {
+        if (CI->getArgOperand(0)->stripPointerCasts() == srcInstr->stripPointerCasts()) {
+          // we are storing into the variable.
+          Value *srcVoidPtr = insertVoidPtrCast(srcInstr, builder);
+          Value *srcIntVoidPtr = insertVoidPtrCast(srcIntInstr, builder);
+          Value *tmpVoidPtr = insertVoidPtrCast(CI->getArgOperand(1), builder);
+          Function *targetIntegrityWriteFunction = fetchHelper.getWriteFunction();
+          // convert the size argument into correct type
+          Value *memcpySizeArg = builder.CreateIntCast(CI->getArgOperand(2), IntegerType::getInt32Ty(m.getContext()), false, "gpIntCast");
+          Value *arguments[] = {srcVoidPtr, srcIntVoidPtr, tmpVoidPtr, memcpySizeArg};
+          // insert the call.
+          builder.CreateCall(targetIntegrityWriteFunction, arguments);
+          isHandled = true;
+        } else if (CI->getArgOperand(1)->stripPointerCasts() == srcInstr->stripPointerCasts()) {
+          // we are reading from the variable.
+          Value *srcVoidPtr = insertVoidPtrCast(srcInstr, builder);
+          Value *srcIntVoidPtr = insertVoidPtrCast(srcIntInstr, builder);
+          Value *tmpVoidPtr = insertVoidPtrCast(CI->getArgOperand(0), builder);
+          // convert the size argument into correct type
+          Value *memcpySizeArg = builder.CreateIntCast(CI->getArgOperand(2), IntegerType::getInt32Ty(m.getContext()), false, "gpIntCast");
+
+          Function *targetIntegrityWriteFunction = fetchHelper.getReadFunction();
+          Value *arguments[] = {srcVoidPtr, srcIntVoidPtr, tmpVoidPtr, memcpySizeArg};
+          // insert the call.
+          builder.CreateCall(targetIntegrityWriteFunction, arguments);
+          isHandled = true;
+        }
+
+        // we handled the call..remove the call instruction.
+        if (isHandled) {
+          CI->eraseFromParent();
+        }
+
+      }
+    }
+  }
+  return isHandled;
+}
+
+Value* IntegrityCodeInserter::insertVoidPtrCast(Value *srcPtr, IRBuilder<> &builder) {
+  return builder.CreatePointerCast(srcPtr, Type::getInt8PtrTy(m.getContext()), "gpProtectCast");
 }
