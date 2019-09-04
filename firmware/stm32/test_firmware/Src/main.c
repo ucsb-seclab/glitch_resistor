@@ -79,6 +79,50 @@ int checkTick() {
     return -1;
   }
 }
+
+/**
+ * Let's keep timing information
+ * Reference:
+https://stackoverflow.com/questions/13379220/generating-nanosecond-delay-in-c-on-stm32
+*/
+uint32_t m_nStart; // DEBUG Stopwatch start cycle counter value
+uint32_t m_nStop;  // DEBUG Stopwatch stop cycle counter value
+
+uint32_t flash_start = 0; // DEBUG Stopwatch start cycle counter value
+uint32_t flash_end = 0;   // DEBUG Stopwatch stop cycle counter valu
+
+#define DEMCR_TRCENA 0x01000000
+
+/* Core Debug registers */
+#define DEMCR (*((volatile uint32_t *)0xE000EDFC))
+#define DWT_CTRL (*(volatile uint32_t *)0xe0001000)
+#define CYCCNTENA (1 << 0)
+#define DWT_CYCCNT ((volatile uint32_t *)0xE0001004)
+#define CPU_CYCLES *DWT_CYCCNT
+
+#define STOPWATCH_START                                                        \
+  { m_nStart = *((volatile unsigned int *)0xE0001004); }
+#define STOPWATCH_STOP                                                         \
+  { m_nStop = *((volatile unsigned int *)0xE0001004); }
+
+static inline void stopwatch_reset(void) {
+  /* Enable DWT */
+  DEMCR |= DEMCR_TRCENA;
+  *DWT_CYCCNT = 0;
+  /* Enable CPU cycle counter */
+  DWT_CTRL |= CYCCNTENA;
+}
+
+static inline uint32_t stopwatch_getticks() { return CPU_CYCLES; }
+
+static inline void stopwatch_delay(uint32_t ticks) {
+  uint32_t end_ticks = ticks + stopwatch_getticks();
+  while (1) {
+    if (stopwatch_getticks() >= end_ticks)
+      break;
+  }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -117,12 +161,22 @@ int main(void) {
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   int last_tick = -1;
+  char buffer[100];
   // gr_tick = -1;
+  u_int32_t loop_time = 0;
+
+  sprintf(buffer, "Boot time: %d\n\r", stopwatch_getticks());
+  HAL_UART_Transmit(&huart2, (uint8_t *)buffer, strlen(buffer), 0xFFFF);
+  sprintf(buffer, "Flash time: %d\n\r", flash_end - flash_start);
+  HAL_UART_Transmit(&huart2, (uint8_t *)buffer, strlen(buffer), 0xFFFF);
+
   while (last_tick != 0) {
+    stopwatch_reset();
+
     /* USER CODE END WHILE */
     gr_tick = HAL_GetTick();
     int diff = (gr_tick - last_tick);
-    char buffer[100];
+
     if (checkValue(gr_tick) == GR_SUCCESS || checkTick() == 0) {
       for (int x = 0; x < 100; x++) {
         sprintf(buffer, "yes %d %d\n\r", diff, gr_tick);
@@ -138,6 +192,10 @@ int main(void) {
 
     last_tick = gr_tick;
     /* USER CODE BEGIN 3 */
+
+    loop_time = stopwatch_getticks();
+    sprintf(buffer, "Loop time: %d\n\r", loop_time);
+    HAL_UART_Transmit(&huart2, (uint8_t *)buffer, strlen(buffer), 0xFFFF);
   }
   while (1) {
     char buffer[] = "loop over!";

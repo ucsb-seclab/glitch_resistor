@@ -41,6 +41,16 @@ def get_boot_time():
             return int(line.split(":")[1].strip())
 
 
+def get_flash_time():
+    """ Return the boot time as an integer """
+    while 1:
+        line = ser.readline().strip()
+        line = line.decode("ascii")
+        print(line)
+        if "Flash time" in line:
+            return int(line.split(":")[1].strip())
+
+
 if not ser.isOpen():
     print("Failed to open serial port!")
     sys.exit(0)
@@ -50,17 +60,25 @@ only_files = [f for f in listdir(output_path) if isfile(join(output_path, f))]
 only_bins = [f for f in only_files if "bin" in f]
 
 boot_times = {}
+flash_times = {}
 for f in only_bins:
     filename = os.path.join(output_path, f)
     program_board(filename)
     boot_times[f] = []
+    flash_times[f] = []
     for x in range(10):
         reset_board()
         boot_time = get_boot_time()
+        flash_time = get_flash_time()
         print(boot_time)
         boot_times[f].append(boot_time)
+        flash_times[f].append(flash_time)
+
+pprint.pprint(boot_times)
+pprint.pprint(flash_times)
 
 pprint.pprint(boot_times)
 
 output_filename = os.path.join(output_path, "boot_times.pickle")
-pickle.dump(boot_times, open(output_filename, "wb"))
+pickle.dump({'total': boot_times, 'flash': flash_times}, open(output_filename, "wb"))
+
