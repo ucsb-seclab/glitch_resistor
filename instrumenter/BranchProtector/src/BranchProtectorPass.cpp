@@ -227,13 +227,69 @@ public:
    */
   bool duplicateInstructions(IRBuilder<> &builder, BranchInst &targetBrInst,
                              std::vector<Instruction *> &allInstrs) {
-    std::set<LoadInst*> originalLoadInstrs;
+    std::set<LoadInst *> originalLoadInstrs;
     originalLoadInstrs.clear();
 
+    // First let's see if there are any load values, this can get weird if there
+    // is a store later in the basic block
     std::map<Instruction *, Instruction *> replicatedInstrs;
     for (auto currIn : allInstrs) {
       if (LoadInst *LI = dyn_cast<LoadInst>(currIn)) {
         originalLoadInstrs.insert(LI);
+        Instruction *newInstr = currIn->clone();
+        builder.Insert(newInstr);
+        replicatedInstrs[currIn] = newInstr;
+      }
+    }
+
+    // Now re-organize dependent stores i.e., ensure that there are no stores
+    // to the pointer from which we try to load again.
+    // Here, what we do is, find all store instructions that are in-between
+    // originalLoadInstr and corresponding replicated instructions and ensure
+    // that we don't clone any of the instructions before the store, but instead
+    // simply load the value.
+    //
+    // TODO: Make sure this is a "general" solution
+    std::vector<Instruction *> instructionsToRemove;
+    instructionsToRemove.clear();
+    if (!originalLoadInstrs.empty()) {
+      DominatorTree DT(*(targetBrInst.getFunction()));
+      for (auto *origLDInstr : originalLoadInstrs) {
+        Instruction *replicatedLoadInstr = replicatedInstrs[origLDInstr];
+        Value *loadFromPtr = origLDInstr->getPointerOperand();
+        for (auto U : loadFromPtr->users()) {
+          if (auto SI = dyn_cast<StoreInst>(U)) {
+            // ok, there is a store to the pointer.
+            if (DT.dominates(origLDInstr, SI) &&
+                DT.dominates(SI, replicatedLoadInstr)) {
+              if (Verbose) {
+                errs() << TAG << " Identified a store instruction:";
+                SI->print(llvm::errs());
+              }
+              Value *storeValue = SI->getValueOperand();
+
+              recursivelyGetInstructionsToReplicate(
+                  dyn_cast<Instruction>(storeValue), instructionsToRemove);
+
+              for (auto remInstr : instructionsToRemove) {
+                if (!dyn_cast<LoadInst>(remInstr)) {
+                  if (Verbose)
+                    errs() << TAG << "Not copying: " << *remInstr << "\n";
+                  allInstrs.erase(
+                      std::remove(allInstrs.begin(), allInstrs.end(), remInstr),
+                      allInstrs.end());
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Now replicate other instructions
+    for (auto currIn : allInstrs) {
+      if (LoadInst *LI = dyn_cast<LoadInst>(currIn)) {
+        continue;
       }
       Instruction *newInstr = currIn->clone();
       builder.Insert(newInstr);
@@ -247,6 +303,7 @@ public:
         }
       }
     }
+
     // Okay, now that we replicated all the instructions.
     // change the condition of the branch instruction to refer to the newly
     // inserted instruction.
@@ -254,32 +311,6 @@ public:
       if (replicatedInstrs.find(CI) != replicatedInstrs.end()) {
         targetBrInst.replaceUsesOfWith(targetBrInst.getCondition(),
                                        replicatedInstrs[CI]);
-      }
-    }
-
-    // Now re-organize dependent stores i.e., ensure that there are no stores
-    // to the pointer from which we try to load again.
-    // Here, what we do is, find all store instructions that are in-between originalLoadInstr
-    // and corresponding replicated instructions and try to move then after
-    // the replicated load instruction.
-    if (!originalLoadInstrs.empty()) {
-      DominatorTree DT(*(targetBrInst.getFunction()));
-      for (auto *origLDInstr: originalLoadInstrs) {
-        Instruction *replicatedLoadInstr = replicatedInstrs[origLDInstr];
-        Value* loadFromPtr = origLDInstr->getPointerOperand();
-        for (auto U : loadFromPtr->users()) {
-          if (auto SI = dyn_cast<StoreInst>(U)) {
-            // ok, there is a store to the pointer.
-            if (DT.dominates(origLDInstr, SI) && DT.dominates(SI, replicatedLoadInstr)) {
-              errs() << "[+] Identified a store instruction:";
-              SI->print(llvm::errs());
-              errs() << " to be moved from:" << SI->getParent()->getName() << " to " <<
-              replicatedLoadInstr->getParent()->getName() << "\n";
-              SI->removeFromParent();
-              SI->insertAfter(replicatedLoadInstr);
-            }
-          }
-        }
       }
     }
 
