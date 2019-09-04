@@ -1,4 +1,7 @@
+#include "main.h"
+#include "stm32_hal_legacy.h"
 #include <stdlib.h>
+
 // void gpdelay(void) {
 //    // make sure that you initialize
 //    // srand before this.
@@ -11,30 +14,73 @@
 //    }
 //    return;
 // }
-unsigned int delay_seed = 123456789;
+uint32_t delay_seed = 123456789;
 const unsigned int delay_m = 2147483648; // 2³¹
 const unsigned delay_a = 1103515245;
 const unsigned delay_c = 12345;
-const unsigned int delay_max_len = 10000;
-const unsigned int delay_dont_run_prct = delay_m * .01; // %
+const unsigned int delay_max_len = 100;
+const unsigned int delay_run_prct = delay_m * 1; // %
+int delay_first = 1;
+int delay_writing = 0;
+const unsigned int seed_address = 0x0800e400;
 
-void seed_write() {
-  // Implement delay_a function to save delay_seed to non-volatile memory
+/***
+ * Reference:
+https://community.st.com/s/question/0D50X00009XkfIOSAZ/stm32f0-help-with-flash-to-read-and-write-hal-libraries
+*/
+__attribute__((annotate("NoDelay"))) void seed_write() {
+  delay_writing = 1;
+  // Implement function to save delay_seed to non-volatile memory
+  /* Unlock the Flash to enable the flash control register access *************/
+  HAL_FLASH_Unlock();
+  FLASH->CR |= FLASH_CR_PER; /* (1) */
+
+  FLASH->AR = 0x0800e400; /* (2) */
+
+  FLASH->CR |= FLASH_CR_STRT; /* (3) */
+
+  while ((FLASH->SR & FLASH_SR_BSY) != 0) /* (4) */
+
+  { /* For robust implementation, add here time-out management */
+  }
+
+  if ((FLASH->SR & FLASH_SR_EOP) != 0) /* (5) */
+
+  {
+    FLASH->SR |= FLASH_SR_EOP; /* (6)*/
+  }
+
+  else
+
+  { /* Manage the error cases */
+  }
+
+  FLASH->CR &= ~FLASH_CR_PER; /* (7) */
+
+  HAL_FLASH_Program(TYPEPROGRAM_WORD, 0x0800e400, delay_seed);
+  /* Lock the Flash to disable the flash control register access (recommended
+  to protect the FLASH memory against possible unwanted operation) *********/
+  HAL_FLASH_Lock();
+  delay_writing = 0;
 }
 
-void seed_read() {
-  // Implement delay_a function to read delay_seed from non-volatile memory
+__attribute__((annotate("NoDelay"))) void seed_read() {
+  // Implement function to read delay_seed from non-volatile memory
+  delay_seed = *((uint32_t *)0x0800e400);
 }
 
 __attribute__((annotate("NoDelay"))) void gpdelay() {
-  if (delay_seed == 123456789) {
+  if (delay_writing) {
+    return;
+  }
+  if (delay_first) {
     seed_read();
   }
   // Update Seed
   delay_seed = (delay_a * delay_seed + delay_c) % delay_m;
 
   // Don't always execute loop
-  if (delay_seed < delay_dont_run_prct) {
+  if (delay_seed < delay_run_prct) {
     // Ensure that only loop delay_a maximum number of times (even delay_a few
     // instructions can throw off delay_a glitch)
     unsigned int loop_len = delay_seed % delay_max_len;
@@ -42,6 +88,9 @@ __attribute__((annotate("NoDelay"))) void gpdelay() {
       asm("");
   }
 
-  // Update oudelay_seedr
-  seed_write();
+  // Update our delay_seed
+  if (delay_first) {
+    seed_write();
+    delay_first = 0;
+  }
 }
