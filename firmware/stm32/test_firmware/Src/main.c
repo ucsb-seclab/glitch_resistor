@@ -43,7 +43,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart2;
-int gr_tick = 0;
+unsigned int gr_tick = 0;
 enum valueRtn {
   GR_SUCCESS = 3889321827,
   GR_FAILURE = 3552161478,
@@ -72,6 +72,13 @@ int checkValue(int value) {
   }
 }
 
+int checkTick() {
+  if (gr_tick == 0) {
+    return 0;
+  } else {
+    return -1;
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -113,15 +120,16 @@ int main(void) {
   // gr_tick = -1;
   while (last_tick != 0) {
     /* USER CODE END WHILE */
-    int gr_tick = HAL_GetTick();
+    gr_tick = HAL_GetTick();
+    int diff = (gr_tick - last_tick);
     char buffer[100];
-    if (checkValue(gr_tick) == GR_SUCCESS) {
+    if (checkValue(gr_tick) == GR_SUCCESS || checkTick() == 0) {
       for (int x = 0; x < 100; x++) {
-        sprintf(buffer, "yes %d %d\n\r", (gr_tick - last_tick), gr_tick);
+        sprintf(buffer, "yes %d %d\n\r", diff, gr_tick);
         HAL_Delay(5000);
       }
     } else {
-      sprintf(buffer, "no %d %d\n\r", (gr_tick - last_tick), gr_tick);
+      sprintf(buffer, "no %d %d\n\r", diff, gr_tick);
 
       HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
       HAL_Delay(500);
