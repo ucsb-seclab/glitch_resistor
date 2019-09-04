@@ -19,15 +19,15 @@ const unsigned int delay_max_len = 10000;
 
 const unsigned int delay_run_prct = delay_m * .9; // %
 
-void seed_write() {
+__attribute__((annotate("NoDelay"))) void seed_write() {
   // Implement delay_a function to save delay_seed to non-volatile memory
 }
 
-void seed_read() {
+__attribute__((annotate("NoDelay"))) void seed_read() {
   // Implement delay_a function to read delay_seed from non-volatile memory
 }
 
-__attribute__((annotate("NoDelay"))) void gpdelay() {
+__attribute__((annotate("NoResistor"))) void gpdelay() {
   if (delay_seed == 123456789) {
     seed_read();
   }
