@@ -115,6 +115,8 @@ public:
         //    U2->dump();
         //}
         // if(!ri->getFunction()->hasAddressTaken())
+        if (Verbose)
+          errs() << TAG << "Found " << *ri << "\n";
         rets.push_back(ri);
       }
     }
