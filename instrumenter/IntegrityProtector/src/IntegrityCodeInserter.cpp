@@ -2,6 +2,7 @@
 // Created by Aravind Machiry on 2019-08-04.
 //
 
+#include <llvm/IR/CFG.h>
 #include "IntegrityCodeInserter.h"
 
 using namespace GLitchPlease;
@@ -113,10 +114,8 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
         newVal = builder.CreatePointerCast(newVal, srcLoad->getType(), "gpConToOrPtr");
       }
 
-      for (auto loadUse : srcLoad->users()) {
-        loadUse->replaceUsesOfWith(srcLoad, newVal);
-      }
-
+      replaceUsesOfInstruction(srcLoad, newVal);
+      
       srcLoad->eraseFromParent();
 
       // NO need to propagate this information, because we replaced all the instructions
@@ -197,6 +196,27 @@ Value* IntegrityCodeInserter::createNewLocalVar(Function *srcFunction, Type *var
   IRBuilder<> builder(&(*(srcFunction->getEntryBlock().getFirstInsertionPt())));
   AllocaInst *newAlloca = builder.CreateAlloca(varType, nullptr, "intProtectTmp");
   return newAlloca;
+}
+
+bool IntegrityCodeInserter::replaceUsesOfInstruction(Instruction *currInstr, Value *newVal) {
+  // replace regular uses
+  for (auto instrUse : currInstr->users()) {
+    instrUse->replaceUsesOfWith(currInstr, newVal);
+  }
+
+  // Now try to replace all PHI instructions.
+  // For some reason llvm does not give PHI instructions
+  // in the list of uses.
+  for(auto &bb: *(currInstr->getFunction())) {
+    BasicBlock *sBB = &bb;
+    for (auto &I:*sBB) {
+      if(PHINode *PHI = dyn_cast<PHINode>(&I)) {
+        PHI->replaceUsesOfWith(currInstr, newVal);
+      }
+    }
+  }
+
+  return true;
 }
 
 bool IntegrityCodeInserter::protectCallInstr(Value *srcInstr, Value *srcIntInstr, CallInst *CI) {

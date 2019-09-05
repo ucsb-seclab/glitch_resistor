@@ -47,6 +47,16 @@ namespace GLitchPlease {
     bool canReplicateUsingReplacement(Value *currInstr);
 
     /***
+     * Replace all the uses of the provided instruction with the new
+     * instruction.
+     *
+     * @param currInstr Instruction to replace.
+     * @param newInstr New value to be used.
+     * @return true/false
+     */
+    bool replaceUsesOfInstruction(Instruction *currInstr, Value *newValue);
+
+    /***
      *  Replicate the uses of srcInstr by inserting instructions to integrity protect
      *  its reads/writes using srcIntInstr as its integrity store.
      * @param srcInstr Instruction that needs to be replicated.
