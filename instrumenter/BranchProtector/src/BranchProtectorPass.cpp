@@ -93,7 +93,7 @@ public:
   }
 
   /**
-   * Get a list of all of the annotated functions
+   * Get a list of all of the annotated funactions
    */
   void getAnnotatedFunctions(Module *M) {
     for (Module::global_iterator I = M->global_begin(), E = M->global_end();
@@ -265,6 +265,7 @@ public:
               if (Verbose) {
                 errs() << TAG << " Identified a store instruction:";
                 SI->print(llvm::errs());
+                errs() << "\n";
               }
               Value *storeValue = SI->getValueOperand();
 
@@ -273,6 +274,7 @@ public:
 
               for (auto remInstr : instructionsToRemove) {
                 if (!dyn_cast<LoadInst>(remInstr)) {
+                  replicatedInstrs[remInstr] = replicatedLoadInstr;
                   if (Verbose)
                     errs() << TAG << "Not copying: " << *remInstr << "\n";
                   allInstrs.erase(
@@ -447,7 +449,7 @@ public:
     // Place a call to our delay function at the end of every basic block in the
     // function
     bool edited = false;
-    errs() << TAG << "Instrumenting: " << F.getName() << "!\n";
+    errs() << TAG << F.getName() << "\n";
 
     if (isFunctionSafeToModify(&F)) {
       // errs() << TAG << F << "\n";
