@@ -133,13 +133,13 @@ bool IntegrityCodeInserter::replicateAndIntegrityProtect(Value *srcInstr, Value 
       auto targetInsertPoint = srcStore->getIterator();
       IRBuilder<> builder(&(*targetInsertPoint));
       // Are we storing a pointer? then convert into void*
-      if(toStoreValue->getType()->isPointerTy()) {
+      if (toStoreValue->getType()->isPointerTy()) {
         toStoreValue = insertVoidPtrCast(toStoreValue, builder);
       }
 
       // convert the pointers into void*
       Value *srcIntBC = insertVoidPtrCast(srcIntInstr, builder);
-      Value *srcBC = insertVoidPtrCast(srcIntInstr, builder);
+      Value *srcBC = insertVoidPtrCast(srcInstr, builder);
 
       // Insert a call to the integrity checking write function.
       Value *arguments[] = {srcBC, srcIntBC, toStoreValue};
