@@ -173,8 +173,8 @@ public:
         }
       }
       if (shouldReplace) {
-        errs() << TAG << "Modified return address for: "
-               << ri->getFunction()->getName() << "\n";
+        errs() << TAG << "Instrumenting: " << ri->getFunction()->getName()
+               << "\n";
         // TODO: fix up this constant
         ConstantInt *glitch_resistant =
             ConstantInt::get(Type::getInt32Ty(M.getContext()), 0x55555555);

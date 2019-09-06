@@ -121,7 +121,7 @@ public:
 
     try {
       // if(Verbose) {
-      //   dbgs() << "Instrumenting:" << *targetInstr << "\n";
+      dbgs() << TAG << "Instrumenting: " << *targetInstr << "\n";
       // }
       // set the insertion point to be after the load instruction.
       auto targetInsertPoint = targetInstr->getIterator();
@@ -179,7 +179,7 @@ public:
     // Place a call to our delay function at the end of every basic block in the
     // function
     bool edited = false;
-    errs() << TAG << "Instrumenting: " << F.getName() << "!\n";
+    errs() << TAG << F.getName() << "\n";
     if (isFunctionSafeToModify(&F)) {
       for (auto &bb : F) {
         insertDelay(&bb.back(), false);
