@@ -178,9 +178,10 @@ int main(void) {
     int diff = (gr_tick - last_tick);
 
     if (checkValue(gr_tick) == GR_SUCCESS || checkTick() == 0) {
-      for (int x = 0; x < 100; x++) {
-        sprintf(buffer, "yes %d %d\n\r", diff, gr_tick);
-        HAL_Delay(5000);
+      while (1) {
+        char buffer[] = "You win!";
+        HAL_UART_Transmit(&huart2, (uint8_t *)buffer, strlen(buffer), 0xFFFF);
+        HAL_Delay(100);
       }
     } else {
       sprintf(buffer, "no %d %d\n\r", diff, gr_tick);
@@ -198,8 +199,9 @@ int main(void) {
     HAL_UART_Transmit(&huart2, (uint8_t *)buffer, strlen(buffer), 0xFFFF);
   }
   while (1) {
-    char buffer[] = "loop over!";
+    char buffer[] = "You win!";
     HAL_UART_Transmit(&huart2, (uint8_t *)buffer, strlen(buffer), 0xFFFF);
+    HAL_Delay(100);
   }
   /* USER CODE END 3 */
 }
