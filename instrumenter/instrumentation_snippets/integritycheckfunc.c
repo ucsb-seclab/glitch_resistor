@@ -1,7 +1,7 @@
 #include <stdlib.h>
 // the flags containing the integrity values to be checked.
 #define LONGINTEGRITYVALUE (~((long)0))
-#define CHARINTEGRITYVALUE (~((char)0))
+#define CHARINTEGRITYVALUE (char)((~((char)0)))
 
 #define TRUE 0xAAAAAAAA
 #define FALSE 0xBBBBBBBB
@@ -38,14 +38,14 @@ int gp_safe_read(void *src, void *src_int, void *dst, unsigned size) {
     }
 
     // only if the integrity is fine.
-    if (integrityIsFine) {
+    if (integrityIsFine == TRUE) {
       while (size) {
         char rdVal = *((char *)src);
         char sanVal = *((char *)src_int);
         if ((rdVal ^ sanVal) == CHARINTEGRITYVALUE) {
           *((char *)dst) = rdVal;
         } else {
-          integrityIsFine = 0;
+          integrityIsFine = FALSE;
           break;
         }
         src++;
