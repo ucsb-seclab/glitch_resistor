@@ -7,6 +7,8 @@ Still under development...
 
 # STM32
 32 Bit arm board that is used for both testing and glitching
+Included is both a *test_firmware* to be used for development and a *demo* firmware that can be used to demonstrate our defenses.
+
 
 ## Tools
 https://github.com/texane/stlink

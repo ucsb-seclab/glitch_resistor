@@ -3,6 +3,8 @@ These are some quick gdb demos to demonstrate the efficacy of our defenses again
 
 Before any of the demos, be sure to run `st-util`
 
+WARNING: Recompiling will likely result in different addresses, be sure to update the scripts appropriately
+
 ## Constant Diversification (ENUM/Return Value)
 The following enums are defined in the firmware:
 ```C
