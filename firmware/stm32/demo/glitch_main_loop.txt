@@ -1,0 +1,11 @@
+target extended localhost:4242
+layout asm
+layout regs
+load
+
+break *0x08000726
+
+c
+
+set $pc += 2
+
