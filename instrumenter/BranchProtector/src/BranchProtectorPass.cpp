@@ -227,74 +227,24 @@ public:
    */
   bool duplicateInstructions(IRBuilder<> &builder, BranchInst &targetBrInst,
                              std::vector<Instruction *> &allInstrs) {
-    std::set<LoadInst *> originalLoadInstrs;
-    originalLoadInstrs.clear();
-
-    // First let's see if there are any load values, this can get weird if there
-    // is a store later in the basic block
     std::map<Instruction *, Instruction *> replicatedInstrs;
     for (auto currIn : allInstrs) {
-      if (LoadInst *LI = dyn_cast<LoadInst>(currIn)) {
-        originalLoadInstrs.insert(LI);
-        Instruction *newInstr = currIn->clone();
-        builder.Insert(newInstr);
-        replicatedInstrs[currIn] = newInstr;
-      }
-    }
-
-    // Now re-organize dependent stores i.e., ensure that there are no stores
-    // to the pointer from which we try to load again.
-    // Here, what we do is, find all store instructions that are in-between
-    // originalLoadInstr and corresponding replicated instructions and ensure
-    // that we don't clone any of the instructions before the store, but instead
-    // simply load the value.
-    //
-    // TODO: Make sure this is a "general" solution
-    std::vector<Instruction *> instructionsToRemove;
-    instructionsToRemove.clear();
-    if (!originalLoadInstrs.empty()) {
-      DominatorTree DT(*(targetBrInst.getFunction()));
-      for (auto *origLDInstr : originalLoadInstrs) {
-        Instruction *replicatedLoadInstr = replicatedInstrs[origLDInstr];
-        Value *loadFromPtr = origLDInstr->getPointerOperand();
-        for (auto U : loadFromPtr->users()) {
-          if (auto SI = dyn_cast<StoreInst>(U)) {
-            // ok, there is a store to the pointer.
-            if (DT.dominates(origLDInstr, SI) &&
-                DT.dominates(SI, replicatedLoadInstr)) {
-              if (Verbose) {
-                errs() << TAG << " Identified a store instruction:";
-                SI->print(llvm::errs());
-                errs() << "\n";
-              }
-              Value *storeValue = SI->getValueOperand();
-
-              recursivelyGetInstructionsToReplicate(
-                  dyn_cast<Instruction>(storeValue), instructionsToRemove);
-
-              for (auto remInstr : instructionsToRemove) {
-                if (!dyn_cast<LoadInst>(remInstr)) {
-                  replicatedInstrs[remInstr] = replicatedLoadInstr;
-                  if (Verbose)
-                    errs() << TAG << "Not copying: " << *remInstr << "\n";
-                  allInstrs.erase(
-                      std::remove(allInstrs.begin(), allInstrs.end(), remInstr),
-                      allInstrs.end());
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Now replicate other instructions
-    for (auto currIn : allInstrs) {
-      if (LoadInst *LI = dyn_cast<LoadInst>(currIn)) {
-        continue;
-      }
       Instruction *newInstr = currIn->clone();
-      builder.Insert(newInstr);
+      if (LoadInst *LI = dyn_cast<LoadInst>(currIn)) {
+        // if this is a load instruction? make it volatile
+        LI->setVolatile(true);
+        // also make the new instruction volatile.
+        (dyn_cast<LoadInst>(newInstr))->setVolatile(true);
+        // now insert the newly created load right then and there
+        // since, we marked it as volatile, it will not be optimized.
+        auto instrIterator = LI->getIterator();
+        instrIterator++;
+        IRBuilder<> newBuilder(LI->getParent());
+        newBuilder.SetInsertPoint(&(*instrIterator));
+        newBuilder.Insert(newInstr);
+      } else {
+        builder.Insert(newInstr);
+      }
       replicatedInstrs[currIn] = newInstr;
       for (unsigned i = 0; i < newInstr->getNumOperands(); i++) {
         Value *currOp = newInstr->getOperand(i);
@@ -305,7 +255,6 @@ public:
         }
       }
     }
-
     // Okay, now that we replicated all the instructions.
     // change the condition of the branch instruction to refer to the newly
     // inserted instruction.
@@ -315,7 +264,6 @@ public:
                                        replicatedInstrs[CI]);
       }
     }
-
     return true;
   }
   /***

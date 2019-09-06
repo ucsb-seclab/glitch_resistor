@@ -1,7 +1,7 @@
 #include <stdlib.h>
 // the flags containing the integrity values to be checked.
 #define LONGINTEGRITYVALUE (~((long)0))
-#define CHARINTEGRITYVALUE (~((char)0))
+#define CHARINTEGRITYVALUE (char)(~((char)0))
 
 // This function checks for the integrity of the value being read from
 // the provided src pointer.
@@ -9,7 +9,8 @@
 // If the integrity is valid then it reads size number of bytes
 // into the memory pointed by the dst pointer.
 // also it returns 1 if the integrity is valid else returns 0.
-int gp_safe_read(void *src, void *src_int, void *dst, unsigned size) {
+__attribute__((annotate("NoResistor"))) int
+gp_safe_read(void *src, void *src_int, void *dst, unsigned size) {
   // read safely from the provided src with verifying integrity.
   // try reading longs.
   int integrityIsFine = 1;
@@ -59,34 +60,37 @@ int gp_safe_read(void *src, void *src_int, void *dst, unsigned size) {
 
 // helper function that reads an integer from the
 // provided address
-int gp_read_int(void *src, void *src_int) {
+__attribute__((annotate("NoResistor"))) int gp_read_int(void *src,
+                                                        void *src_int) {
   int to_read = -1;
   if (!gp_safe_read(src, src_int, (void *)(&to_read), sizeof(int))) {
     // integrity failed.
     // as of now we just err out.
-    exit(-1);
+    gr_glitch_detected();
   }
   return to_read;
 }
 
 // helper function that reads a charecter from the provided buffer
-char gp_read_char(void *src, void *src_int) {
+__attribute__((annotate("NoResistor"))) char gp_read_char(void *src,
+                                                          void *src_int) {
   char to_read = -1;
   if (!gp_safe_read(src, src_int, (void *)(&to_read), sizeof(char))) {
     // integrity failed.
     // as of now we just err out.
-    exit(-1);
+    gr_glitch_detected();
   }
   return to_read;
 }
 
 // helper function that reads a pointer value from the provided buffer
-void *gp_read_ptr(void *src, void *src_int) {
+__attribute__((annotate("NoResistor"))) void *gp_read_ptr(void *src,
+                                                          void *src_int) {
   void *to_read = NULL;
   if (!gp_safe_read(src, src_int, (void *)(&to_read), sizeof(void *))) {
     // integrity failed.
     // as of now we just err out.
-    exit(-1);
+    gr_glitch_detected();
   }
   return to_read;
 }
@@ -95,7 +99,8 @@ void *gp_read_ptr(void *src, void *src_int) {
 // from the memory pointed by the src pointer.
 // It also writes the integrity value into the memory pointed by dst_int
 // pointer.
-void gp_safe_write(void *dst, void *dst_int, void *src, unsigned size) {
+__attribute__((annotate("NoResistor"))) void
+gp_safe_write(void *dst, void *dst_int, void *src, unsigned size) {
   if (size > 0) {
     // We do it in 2 passes.
     // first we write in the multiple of long bytes.
@@ -128,16 +133,19 @@ void gp_safe_write(void *dst, void *dst_int, void *src, unsigned size) {
 
 // helper function that writes an integer from the
 // provided address
-void gp_write_int(void *dst, void *dst_int, int toWrite) {
+__attribute__((annotate("NoResistor"))) void
+gp_write_int(void *dst, void *dst_int, int toWrite) {
   gp_safe_write(dst, dst_int, (void *)(&toWrite), sizeof(int));
 }
 
 // helper function that writes a character from the provided buffer
-void gp_write_char(void *dst, void *dst_int, char toWrite) {
+__attribute__((annotate("NoResistor"))) void
+gp_write_char(void *dst, void *dst_int, char toWrite) {
   gp_safe_write(dst, dst_int, (void *)(&toWrite), sizeof(char));
 }
 
 // helper function that writes a pointer value into the provided buffer
-void gp_write_ptr(void *dst, void *dst_int, void *toWrite) {
+__attribute__((annotate("NoResistor"))) void
+gp_write_ptr(void *dst, void *dst_int, void *toWrite) {
   gp_safe_write(dst, dst_int, (void *)(&toWrite), sizeof(void *));
 }

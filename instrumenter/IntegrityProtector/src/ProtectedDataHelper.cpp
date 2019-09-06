@@ -62,7 +62,8 @@ std::map<Value *, Value *> &ProtectedDataHandler::getShadowDataMap() {
           // set the section name.
           newGlobVar->setSection(GPINTEGRITYSECTIONNAME);
           // initialize it to zeros.
-          Constant *globInit = getConstantZeroForType(gVar->getType()->getPointerElementType());
+          Constant *globInit =
+              getConstantZeroForType(gVar->getType()->getPointerElementType());
           newGlobVar->setInitializer(globInit);
         }
         shadowDataVars[currDVar] = newIntegrityVal;
@@ -82,9 +83,10 @@ bool ProtectedDataHandler::isAddressTaken(Value *toCheckValue) {
   return globVar == nullptr;
 }
 
-Constant* ProtectedDataHandler::getConstantZeroForType(Type *targetType) {
+Constant *ProtectedDataHandler::getConstantZeroForType(Type *targetType) {
   Constant *toRet = nullptr;
-  if (targetType->isStructTy() || targetType->isArrayTy() || targetType->isVectorTy()) {
+  if (targetType->isStructTy() || targetType->isArrayTy() ||
+      targetType->isVectorTy()) {
     toRet = ConstantAggregateZero::get(targetType);
   } else if (targetType->isIntegerTy()) {
     toRet = ConstantInt::get(targetType, 0);
