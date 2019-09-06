@@ -38,14 +38,14 @@ int gp_safe_read(void *src, void *src_int, void *dst, unsigned size) {
     }
 
     // only if the integrity is fine.
-    if (integrityIsFine) {
+    if (integrityIsFine == TRUE) {
       while (size) {
         char rdVal = *((char *)src);
         char sanVal = *((char *)src_int);
         if ((rdVal ^ sanVal) == CHARINTEGRITYVALUE) {
           *((char *)dst) = rdVal;
         } else {
-          integrityIsFine = 0;
+          integrityIsFine = FALSE;
           break;
         }
         src++;
