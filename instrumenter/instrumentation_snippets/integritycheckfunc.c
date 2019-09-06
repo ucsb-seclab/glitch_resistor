@@ -1,7 +1,7 @@
 #include <stdlib.h>
 // the flags containing the integrity values to be checked.
 #define LONGINTEGRITYVALUE (~((long)0))
-#define CHARINTEGRITYVALUE (~((char)0))
+#define CHARINTEGRITYVALUE (char)((~((char)0)))
 
 #define TRUE 0xAAAAAAAA
 #define FALSE 0xBBBBBBBB
