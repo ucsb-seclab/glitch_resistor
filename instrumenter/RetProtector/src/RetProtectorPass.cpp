@@ -87,19 +87,8 @@ public:
     }
   }
 
-  bool runOnModule(Module &M) override {
-    // Place a call to our detection function after the return of every function
-    bool edited = false;
-
-    // TODO: other bit sizes as well, but 32 seems to be the most common
-    ConstantInt *zero = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
-
-    // TODO: Will likely need to handle invokes as well
-    vector<ReturnInst *> rets;
-    vector<CallInst *> calls;
-
-    // Find all returns of a constant 0
-    for (User *U : zero->users()) {
+  void findReturns(ConstantInt *ci, vector<ReturnInst *> *rets){
+    for (User *U : ci->users()) {
       Instruction *inst = dyn_cast<Instruction>(U);
       if (!inst || !shouldInstrumentFunc(*(inst->getFunction())))
         continue;
@@ -117,9 +106,26 @@ public:
         // if(!ri->getFunction()->hasAddressTaken())
         if (Verbose)
           errs() << TAG << "Found " << *ri << "\n";
-        rets.push_back(ri);
+        rets->push_back(ri);
       }
     }
+  }
+
+  bool runOnModule(Module &M) override {
+    // Place a call to our detection function after the return of every function
+    bool edited = false;
+
+    // TODO: other bit sizes as well, but 32 seems to be the most common
+    ConstantInt *zero = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
+    ConstantInt *one = ConstantInt::get(Type::getInt32Ty(M.getContext()), 1);
+
+    // TODO: Will likely need to handle invokes as well
+    vector<ReturnInst *> *rets = new vector<ReturnInst *>();
+    vector<CallInst *> calls;
+
+    // Find all returns of a constant 0, 1
+    findReturns(zero, rets);
+    findReturns(one, rets);
 
     // Find All call instructions in the Module
     for (auto it = M.begin(); it != M.end(); it++) {
@@ -128,6 +134,8 @@ public:
         for (Instruction &I : BB) {
           Instruction *inst = &I;
           if (CallInst *ci = dyn_cast<CallInst>(inst)) {
+            //make sure it's a direct call (not indirect through function
+            //pointer)
             if (ci->getCalledFunction())
               calls.push_back(ci);
           }
@@ -138,7 +146,7 @@ public:
     // For each return instruction, verify that 1) it is in a modifiable
     // function and 2) *every* call to it is in a modifiable function.
     vector<ReturnInst *> mod_rets;
-    for (ReturnInst *ri : rets) {
+    for (ReturnInst *ri : *rets) {
       bool mod = true;
       StringRef ret_name = ri->getFunction()->getName();
       for (CallInst *ci : calls) {
@@ -163,30 +171,46 @@ public:
       for (CallInst *ci : calls) {
         if (ci->getCalledFunction()->getName().equals(ret_name)) {
           for (User *U : ci->users()) {
-            // TODO: should verify that we are comparing against a constant ...
             if (isa<Instruction>(U) && !isa<CmpInst>(U)) {
               shouldReplace = false;
               break;
             }
-            to_mod.push_back(U);
+            // TODO: should verify that we are comparing against a constant ...
+            else if(isa<Instruction>(U))
+              to_mod.push_back(U);
           }
         }
       }
       if (shouldReplace) {
         errs() << TAG << "Instrumenting: " << ri->getFunction()->getName()
                << "\n";
-        // TODO: fix up this constant
-        ConstantInt *glitch_resistant =
+        // TODO: fix up these constants. I think they are max hamming distance?
+        // 0101 and 1010 
+        ConstantInt *gr_zero =
             ConstantInt::get(Type::getInt32Ty(M.getContext()), 0x55555555);
+        ConstantInt *gr_one =
+            ConstantInt::get(Type::getInt32Ty(M.getContext()), 0xaaaaaaaa);
         for (User *U : to_mod) {
           if (ReturnInst *ri = dyn_cast<ReturnInst>(U)) {
-            ri->setOperand(0, glitch_resistant);
+            if(ri->getOperand(0) == zero)
+              ri->setOperand(0, gr_zero);
+            else if(ri->getOperand(0) == one)
+              ri->setOperand(0, gr_one);
+            else
+              assert(0 && "[GR RetPro Error] Modifying a ReturnInst that doesn't return 0 or 1");
+            edited = true;
           } else if (CmpInst *cmp = dyn_cast<CmpInst>(U)) {
             int idx = 0;
             for (Use &U : cmp->operands()) {
               Value *v = U.get();
               if (isa<ConstantInt>(v) && v == zero) {
-                cmp->setOperand(idx, glitch_resistant);
+                cmp->setOperand(idx, gr_zero);
+                edited = true;
+                break;
+              }
+              else if(isa<ConstantInt>(v) && v == one) {
+                cmp->setOperand(idx, gr_one);
+                edited = true;
                 break;
               }
               idx++;

@@ -10,6 +10,6 @@ static int b() {
 }
 int main() {
     int i;
-    if(a())
-        b();
+    if(!a() && b())
+      printf("The beetles say");
 }
