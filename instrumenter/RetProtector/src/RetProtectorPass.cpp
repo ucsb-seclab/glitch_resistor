@@ -39,7 +39,7 @@ public:
   std::set<Function *> annotFuncs;
   std::string AnnotationString = "NoResistor";
   std::string TAG = "\033[1;31m[GR/Ret]\033[0m ";
-  bool Verbose = false;
+  bool Verbose = true;
   RetProtectorPass() : ModulePass(ID) { this->delayFunction = nullptr; }
 
   ~RetProtectorPass() {}
@@ -90,6 +90,7 @@ public:
   void findReturns(ConstantInt *ci, vector<ReturnInst *> *rets){
     for (User *U : ci->users()) {
       Instruction *inst = dyn_cast<Instruction>(U);
+      if (inst) inst->dump();
       if (!inst || !shouldInstrumentFunc(*(inst->getFunction())))
         continue;
       else if (ReturnInst *ri = dyn_cast<ReturnInst>(inst)) {
@@ -105,7 +106,7 @@ public:
         //}
         // if(!ri->getFunction()->hasAddressTaken())
         if (Verbose)
-          errs() << TAG << "Found " << *ri << "\n";
+          errs() << TAG << "Found " << *ri << " in " << ri->getFunction()->getName() << "\n";
         rets->push_back(ri);
       }
     }
@@ -114,6 +115,8 @@ public:
   bool runOnModule(Module &M) override {
     // Place a call to our detection function after the return of every function
     bool edited = false;
+
+    M.dump();
 
     // TODO: other bit sizes as well, but 32 seems to be the most common
     ConstantInt *zero = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
