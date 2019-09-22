@@ -216,6 +216,7 @@ public:
     return false;
   }
 
+
   /***
    * Duplicate all the instructions at the provided insertion point.
    * @param builder point at which the instruction needs to be inserted.
@@ -230,6 +231,38 @@ public:
     std::map<Instruction *, Instruction *> replicatedInstrs;
     for (auto currIn : allInstrs) {
       Instruction *newInstr = currIn->clone();
+      if (ICmpInst *currICMPInstr = dyn_cast<ICmpInst>(currIn)) {
+        CmpInst::Predicate currInstrP = currICMPInstr->getPredicate();
+        if (currInstrP == CmpInst::ICMP_EQ || currInstrP == CmpInst::ICMP_NE) {
+          assert (currICMPInstr->getNumOperands() == 2 && "Expect == and != to have 2 operands.");
+          // first get the operands.
+          Value *op1 = currICMPInstr->getOperand(0);
+          Value *op2 = currICMPInstr->getOperand(1);
+
+          // see if these are already replicated? if yes, get the replicated copies.
+          if (Instruction *opInstr = dyn_cast<Instruction>(op1)) {
+            if (replicatedInstrs.find(opInstr) != replicatedInstrs.end()) {
+              op1 = replicatedInstrs[opInstr];
+            }
+          }
+
+          if (Instruction *opInstr = dyn_cast<Instruction>(op2)) {
+            if (replicatedInstrs.find(opInstr) != replicatedInstrs.end()) {
+              op2 = replicatedInstrs[opInstr];
+            }
+          }
+
+          // Now, negate them.
+          Value *xorOp1 = builder.CreateBinOp(Instruction::BinaryOps::Xor, op1,
+                                              ConstantInt::get(op1->getType(), -1));
+          Value *xorOp2 = builder.CreateBinOp(Instruction::BinaryOps::Xor, op2,
+                                              ConstantInt::get(op2->getType(), -1));
+
+          // replace the operands with Xored operands.
+          newInstr->replaceUsesOfWith(currICMPInstr->getOperand(0), xorOp1);
+          newInstr->replaceUsesOfWith(currICMPInstr->getOperand(1), xorOp2);
+        }
+      }
       if (LoadInst *LI = dyn_cast<LoadInst>(currIn)) {
         // if this is a load instruction? make it volatile
         LI->setVolatile(true);
@@ -245,6 +278,8 @@ public:
       } else {
         builder.Insert(newInstr);
       }
+
+      assert(newInstr != nullptr && "New instruction to insert cannot be nullptr");
       replicatedInstrs[currIn] = newInstr;
       for (unsigned i = 0; i < newInstr->getNumOperands(); i++) {
         Value *currOp = newInstr->getOperand(i);
