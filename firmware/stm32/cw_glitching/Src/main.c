@@ -16,185 +16,198 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <stdio.h>
 #include "hal.h"
+#include <stdio.h>
 
-
-void uart_puts(char * s){
-    while(*s){
-        putch(*(s++));
-    }
+void uart_puts(char *s) {
+  while (*s) {
+    putch(*(s++));
+  }
 }
 
-void glitch_infinite(void)
-{
-    char str[64];
-    unsigned int k = 0;
-    //Declared volatile to avoid optimizing away loop.
-    //This also adds lots of SRAM access
-    volatile uint16_t i, j;
-    volatile uint32_t cnt;
-    while(1){
-        cnt = 0;
-        trigger_high();
-        trigger_low();
-        for(i=0; i<200; i++){
-            for(j=0; j<200; j++){
-                cnt++;
-            }
-        }
-        sprintf(str, "%lu %d %d %d\n", cnt, i, j, k++);
-        uart_puts(str);
-    }
+void glitch1(void) {
+  // Some fake variable
+  volatile uint8_t a = 1;
+
+  // Trigger
+  *PIN_HIGH = TRIGGER_PIN;
+  *PIN_LOW = TRIGGER_PIN;
+
+  // Infinite loop
+  while (a != 0) {
+    ;
+  }
+  asm("mov r0, r3");
+  asm("bl putch");
+  putch('\n');
+  uart_puts("Yes!");
+  putch('\n');
+
+  // Several loops in order to try and prevent restarting
+  while (a != 2) {
+    ;
+  }
+  while (a != 2) {
+    ;
+  }
+  while (1) {
+    ;
+  }
 }
 
-void glitch1(void)
-{
-    led_ok(1);
-    led_error(0);
+void glitch_fixed(void) {
+  // Some fake variable
+  volatile uint8_t a = 0xAA;
 
-    //Some fake variable
-    volatile uint8_t a = 0;
+  // Trigger
+  *PIN_HIGH = TRIGGER_PIN;
+  *PIN_LOW = TRIGGER_PIN;
 
-    putch('A');
+  // Infinite loop
+  while (a != 0x55) {
+    ;
+  }
+  asm("mov r0, r3");
+  asm("bl putch");
+  putch('\n');
+  uart_puts("Yes!");
+  putch('\n');
 
-    //External trigger logic
-    trigger_high();
-    trigger_low();
-
-    //Should be an infinite loop
-    while(a != 2){
-        ;
-    }
-
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-
-    uart_puts("1234");
-
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-    led_error(1);
-
-    //Several loops in order to try and prevent restarting
-    while(1){
-        ;
-    }
-    while(1){
-        ;
-    }
-    while(1){
-        ;
-    }
-    while(1){
-        ;
-    }
-    while(1){
-        ;
-    }
+  // Several loops in order to try and prevent restarting
+  while (a != 2) {
+    ;
+  }
+  while (a != 2) {
+    ;
+  }
+  while (1) {
+    ;
+  }
 }
 
+void multi_glitch(void) {
+  // Some fake variable
+  volatile uint8_t a = 0;
 
-void glitch2(void)
-{
-    char c;
+  // Trigger
+  *PIN_HIGH = TRIGGER_PIN;
+  *PIN_LOW = TRIGGER_PIN;
 
-    putch('B');
+  // Infinite loop
+  while (a != 2) {
+    ;
+  }
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
 
-    c = getch();
+  uart_puts("Yes1!");
+  putch('\n');
+  putch(a);
+  putch('\n');
 
-    trigger_high();
-    trigger_low();
+  for (int i = 0; i < 100000; i++) {
+    asm("nop");
+  }
 
-    if (c != 'q'){
-        putch('1');
-    } else {
-        putch('2');
-    }
-    putch('\n');
-    putch('\n');
-    putch('\n');
-    putch('\n');
+  *PIN_HIGH = TRIGGER_PIN;
+  *PIN_LOW = TRIGGER_PIN;
+
+  while (a != 2) {
+    ;
+  }
+  uart_puts("Yes!");
+  putch('\n');
+  putch(a);
+  putch('\n');
+
+  // Several loops in order to try and prevent restarting
+  while (a != 2) {
+    ;
+  }
+  while (a != 2) {
+    ;
+  }
+  while (1) {
+    ;
+  }
+}
+void long_glitch(void) {
+  // Some fake variable
+  volatile uint8_t a = 0;
+  volatile uint8_t b = 0;
+
+  // Trigger
+  *PIN_HIGH = TRIGGER_PIN;
+  *PIN_LOW = TRIGGER_PIN;
+
+  // Infinite loops
+  while (a != 2) {
+    ;
+  }
+  while (b != 2) {
+    ;
+  }
+  uart_puts("Yes!");
+  putch('\n');
+  putch(a);
+  putch(b);
+  putch('\n');
+
+  // Several loops in order to try and prevent restarting
+  while (a != 2) {
+    ;
+  }
+  while (a != 2) {
+    ;
+  }
+  while (1) {
+    ;
+  }
 }
 
+int main(void) {
 
-void glitch3(void)
-{
-    char inp[16];
-    char c = 'A';
-    unsigned char cnt = 0;
-    uart_puts("Password:");
+  platform_init();
+  init_uart();
+  trigger_setup();
 
-    while((c != '\n') & (cnt < 16)){
-        c = getch();
-        inp[cnt] = c;
-        cnt++;
-    }
+  /* Uncomment this to get a HELLO message for debug */
 
-    char passwd[] = "touch";
-    char passok = 1;
-
-    trigger_high();
-    trigger_low();
-
-    //Simple test - doesn't check for too-long password!
-    for(cnt = 0; cnt < 5; cnt++){
-        if (inp[cnt] != passwd[cnt]){
-            passok = 0;
-        }
-    }
-
-    if (!passok){
-        uart_puts("Denied\n");
-    } else {
-        uart_puts("Welcome\n");
-    }
-}
-
-int main(void){
-
-    platform_init();
-    init_uart();
-    trigger_setup();
-
-    /* Uncomment this to get a HELLO message for debug */
-    putch('h');
-    putch('e');
-    putch('l');
-    putch('l');
-    putch('o');
-    putch('\n');
-
-    //This is needed on XMEGA examples, but not normally on ARM. ARM doesn't have this macro normally anyway.
+  // This is needed on XMEGA examples, but not normally on ARM. ARM doesn't have
+  // this macro normally anyway.
 #ifdef __AVR__
-    _delay_ms(20);
+  _delay_ms(20);
 #endif
 
-
-    while(1){
-#if defined(GLITCH1)
-        glitch1();
-#elif defined(GLITCH2)
-        glitch2();
-#elif defined(GLITCH3)
-        glitch3();
-#elif defined(GLITCH_INF)
-        glitch_infinite();
+  while (1) {
+#ifdef LOOP
+    uart_puts("single");
+    glitch1();
 #endif
+#ifdef NOZERO
+    uart_puts("nozero");
+    glitch_fixed();
+#endif
+#ifdef DOUBLE
+    uart_puts("multi");
+    multi_glitch();
+#endif
+#ifdef LONG
+    uart_puts("long");
+    long_glitch();
+#endif
+  }
 
-    }
-
-    return 1;
+  return 1;
 }

@@ -1,6 +1,12 @@
 #ifndef STM32F0_HAL_H
 #define STM32F0_HAL_H
 
+
+#define TRIGGER_PIN 0x1000
+
+#define PIN_HIGH ((volatile unsigned int *) (0x48000018))
+#define PIN_LOW ((volatile unsigned int *) (0x48000028))
+
 void init_uart(void);
 void putch(char c);
 char getch(void);
