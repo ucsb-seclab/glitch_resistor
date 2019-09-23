@@ -254,9 +254,9 @@ public:
 
           // Now, negate them.
           Value *xorOp1 = builder.CreateBinOp(Instruction::BinaryOps::Xor, op1,
-                                              ConstantInt::get(op1->getType(), -1));
+                                              ConstantInt::get(op1->getType(), ~0));
           Value *xorOp2 = builder.CreateBinOp(Instruction::BinaryOps::Xor, op2,
-                                              ConstantInt::get(op2->getType(), -1));
+                                              ConstantInt::get(op2->getType(), ~0));
 
           // replace the operands with Xored operands.
           newInstr->replaceUsesOfWith(currICMPInstr->getOperand(0), xorOp1);
