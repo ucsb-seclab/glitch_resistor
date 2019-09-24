@@ -55,6 +55,36 @@ void glitch1(void) {
   }
 }
 
+void single_one(void) {
+  // Some fake variable
+  volatile uint8_t a = 0;
+
+  // Trigger
+  *PIN_HIGH = TRIGGER_PIN;
+  *PIN_LOW = TRIGGER_PIN;
+
+  // Infinite loop
+  while (!a) {
+    ;
+  }
+  asm("mov r0, r3");
+  asm("bl putint");
+  putch('\n');
+  uart_puts("Yes!");
+  putch('\n');
+
+  // Several loops in order to try and prevent restarting
+  while (a != 2) {
+    ;
+  }
+  while (a != 2) {
+    ;
+  }
+  while (1) {
+    ;
+  }
+}
+
 void glitch_fixed(void) {
   // Some fake variable
   volatile uint32_t a = 3889321827;
@@ -198,6 +228,10 @@ int main(void) {
 #ifdef SINGLE
     uart_puts("single\n");
     glitch1();
+#endif
+#ifdef SINGLEONE
+    uart_puts("singleone\n");
+    single_one();
 #endif
 #ifdef NOZERO
     uart_puts("nozero\n");

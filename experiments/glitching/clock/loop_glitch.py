@@ -326,6 +326,17 @@ if __name__ == "__main__":
         multi_glitch = False
         repeat = 1
 
+    elif args.experiment == "single_one":
+
+        function_name = "SINGLEONE"
+        sample_size = 1
+        ext_offsets = range(0, 10)
+        widths = numpy.arange(-49, 49, 1)
+        offsets = numpy.arange(-49, 49, 1)
+        stop_at_optimal = False
+        multi_glitch = False
+        repeat = 1
+
     elif args.experiment == "store":
 
         function_name = "NOZERO"

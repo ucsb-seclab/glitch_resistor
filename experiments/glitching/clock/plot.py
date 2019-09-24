@@ -73,6 +73,10 @@ for f in onlyfiles:
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     ax.scatter(xs, ys, zs)
+    ax.set_xticks(xs)
+    ax.set_xlabel('Target Offset', fontsize=20)
+    ax.set_ylabel('Width', fontsize=20)
+    ax.set_zlabel('Offset', fontsize=20)
     plt.show()
 
     print(f)
