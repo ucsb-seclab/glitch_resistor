@@ -1,0 +1,254 @@
+#!/usr/bin/env python
+# Native
+import argparse
+import os
+import pprint
+import random
+import struct
+
+from avatar2 import *
+from glitchresistor.glitchresistor import *
+
+import logging
+
+from pretender.logger import LogWriter
+from pretender.bin_parser import M3Parser
+from pretender.coverage import get_hit_blocks
+from pretender.common import *
+from pretender.hooks import *
+
+import pretender.globals as G
+
+logger = logging.getLogger(__name__)
+
+
+def parse_args():
+    # Default argument values
+    sample = "firmware/Nucleo_blink_led.bin"
+    openocd_conf = '/usr/share/openocd/scripts/board/st_nucleo_l1.cfg'
+    output_dir = '.'
+    qemu_executable = os.path.join(os.path.dirname(__file__),
+                                   "../../avatar2-pretender/targets/build/qemu/arm-softmmu/qemu-system-arm")
+    model_file = os.path.join(os.path.dirname(__file__), "../models/due.pickle")
+    board_config = os.path.join(os.path.dirname(__file__), "../board_configs/due.yaml")
+    gdb_port = 1235
+    qemu_port = 23454
+
+    # Get user input
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--glitch-config", "-g", help="Glitching config file YAML",
+                        default=None)
+
+    parser.add_argument("--board-config", help="Board config file YAML",
+                        default=board_config)
+    parser.add_argument('--proto', help="Select Avatar protocol to use",
+                        choices=('openocd', 'gdb', 'jlink'),
+                        default='openocd')
+    parser.add_argument("sample", default=sample,
+                        help="Firmware binary being emulated.")
+    parser.add_argument("--openocd_conf", "-c", default=openocd_conf,
+                        help="OpenOCD config file.")
+    parser.add_argument("--output_dir", "-o", default=output_dir,
+                        help="Output directory for logging.")
+    parser.add_argument("--gdb_port", default=gdb_port,
+                        help="GDB port number.")
+    parser.add_argument("--mmio_model", "-m", default=model_file,
+                        help="MMIO Model file (pretender/conware model).")
+    parser.add_argument('--max32_serial', action='store_true', help='Enable serial UART for Max32 on port 5656')
+    parser.add_argument("--qemu_executable", "-x", default=qemu_executable,
+                        help="QEMU Executable.")
+    parser.add_argument("--qemu_port", "-q", default=qemu_port,
+                        help="QEMU Port.")
+    parser.add_argument("--debug", "-d", default=False, action='store_true',
+                        help="QEMU Port.")
+    parser.add_argument("--output_file", "-O", default="emulated_output.csv",
+                        help="File to save recorded MMIO to.")
+    parser.add_argument('--shell', help="Enable IPython shell",
+                        action='store_true')
+    parser.add_argument('--vomit', "-V", action='store_true',
+                        help="Enable the vomit log from QEMU")
+    args = parser.parse_args()
+
+    # Do all of our checks!
+    if not os.path.exists(args.sample):
+        print("Binary file (%s) does not exist." % args.sample)
+        sys.exit()
+
+    if not os.path.exists(args.qemu_executable):
+        print("QEMU executable (%s) does not exist." % args.qemu_executable)
+        sys.exit()
+
+    # Setup Logging
+    logging.basicConfig()
+    l = logging.getLogger()
+    if args.debug:
+        l.setLevel(logging.DEBUG)
+    else:
+        l.setLevel(logging.INFO)
+
+    return args
+
+
+def emulate_write_after(avatar, message, **kwargs):
+    """
+    prints our write message
+    see avatar.ui.message.py
+    """
+    global seq
+
+    _, val, success = kwargs['watched_return']
+
+    if message.address == 0x400e081c:
+        dest = [0] * 4
+        l = message.value
+        dest[0] = chr(l & 0xFF)
+        dest[1] = chr((l >> 8) & 0xFF)
+        dest[2] = chr((l >> 16) & 0xFF)
+        dest[3] = chr((l >> 24) & 0xFF)
+        value_str = "".join(dest)
+
+        logger.info(">> %s (%s)" % (repr(value_str), hex(message.value)))
+    if message.address == 0x40020018 or (message.address == 0x400e1030 and message.value == 0x08000000):
+        print "LED ON", hex(message.value), time.time()
+    elif message.address == 0x40020028 or (message.address == 0x400e1034 and message.value == 0x08000000):
+        print "LED OFF", time.time()
+
+    seq += 1
+
+
+if __name__ == '__main__':
+    args = parse_args()
+    args = load_config(args)
+
+    # Load our glitch config
+    glitch_config = None
+    if args.glitch_config is not None:
+        l.info("Using glitch configuration from %s " % args.board_config)
+        with open(args.glitch_config) as f:
+            glitch_config = yaml.load(f, Loader=yaml.FullLoader)
+
+    skip_instructions = []
+    mutate_instructions = {}
+    mutate_instruction_original = {}
+    glitch_count = 0
+    glitching = False
+
+    if glitch_config is not None:
+        print glitch_config
+        if "skip_instructions" in glitch_config and glitch_config['skip_instructions'] is not None:
+            skip_instructions = glitch_config['skip_instructions']
+        if "mutate_instructions" in glitch_config and glitch_config['mutate_instructions'] is not None:
+            mutate_instructions = glitch_config['mutate_instructions']
+        if "glitch_count" in glitch_config:
+            glitch_count = int(glitch_config["glitch_count"])
+
+        if len(skip_instructions) > 0 or len(mutate_instructions) > 0:
+            glitching = True
+
+    # Setup our binary parser
+    # TODO: Abstract this.
+    bin_parser = M3Parser(args.sample)
+
+    # Read in our model for the board
+    pretender_model = PretenderModel(filename=args.mmio_model)
+
+    # Let's setup avatar
+    avatar = build_avatar(args, emulate=True)
+    avatar.load_plugin("disassembler")
+    qemu = build_qemu_emulator(avatar, args)
+    set_memory_map(avatar, args, model=True, pretender_model=pretender_model)
+
+    # Init our targets
+    l.warn("Init targets")
+    avatar.init_targets()
+
+    # Set our output file
+    G.OUTPUT_TSV = LogWriter(os.path.join(args.output_dir, args.output_file))
+    # set_emulate_hooks(avatar, args)
+
+    # Monitor memory reads to forwarded MMIO
+    avatar.watchmen.add_watchman('RemoteMemoryWrite', 'after',
+                                 emulate_write_after)
+
+
+    qemu.regs.pc = bin_parser.get_entry_point()
+    qemu.regs.sp = bin_parser.get_initial_sp()
+
+    # Set our breakpoints
+    for skip_instruction in skip_instructions:
+        logger.info("Skipping instruction @ %08X" % skip_instruction)
+        qemu.set_breakpoint(skip_instruction)
+
+    for mutate_instruction in mutate_instructions:
+        logger.info("Mutating instruction @ %08X [flipping %d bit(s)]" % (
+            mutate_instruction, mutate_instructions[mutate_instruction]))
+        qemu.set_breakpoint(mutate_instruction)
+
+    if args.shell:
+        import IPython;
+
+        IPython.embed()
+    else:
+
+        qemu.cont()
+
+        start = time.time()
+        glitches = 0
+        while glitching and glitches < glitch_count:
+            qemu.wait()
+            glitches += 1
+
+            pc = qemu.regs.pc
+            if pc in skip_instructions:
+                instruction_size = disassemble_data(qemu.read_memory(pc, 8, raw=True),
+                                                    qemu)[0].size
+                qemu.regs.pc += instruction_size
+
+                logger.info("Skipped instruction @ %08X" % pc)
+
+            if pc in mutate_instructions:
+                if pc not in mutate_instruction_original:
+                    mem_read = qemu.read_memory(pc, 8, raw=True)
+                    instruction_size = disassemble_data(mem_read, qemu)[0].size
+
+                    mutate_instruction_original[mutate_instruction] = mem_read[:instruction_size]
+
+                # start with the original instruction
+                instruction_data = mutate_instruction_original[mutate_instruction]
+                mutated_instruction = struct.unpack("<H", instruction_data)[0]
+                instruction_size = disassemble_data(instruction_data, qemu)[0].size
+
+                # Pick which bits to flip
+                bits_to_flip = random.sample(range(0, 8 * instruction_size), mutate_instructions[pc])
+                for bit in bits_to_flip:
+                    bit_to_flip = 1 << bit
+                    mutated_instruction ^= bit_to_flip
+
+                # # qemu.regs.pc = mutate_instruction_original[pc]
+                #
+                original_instruction = disassemble_data(instruction_data, qemu)[0]
+                original_instruction = "%s\t%s" % (original_instruction.mnemonic,
+                                                   original_instruction.op_str)
+                new_instruction = disassemble_data(struct.pack("<H", mutated_instruction), qemu)[0]
+                new_instruction = "%s\t%s" % (new_instruction.mnemonic,
+                                              new_instruction.op_str)
+                logger.info("Mutated instruction @ %08X  (%s -> %s" % (pc,
+                                                                       original_instruction,
+                                                                       new_instruction))
+                print repr(mutate_instruction_original[mutate_instruction])
+                print repr(struct.pack("<H", mutated_instruction))
+
+                # mutate_instruction_data = struct.pack(">Q", mutated_instruction)[-1*instruction_size:]
+                # print repr(mutate_instruction_data)
+                qemu.write_memory(pc, instruction_size, mutated_instruction)
+
+            qemu.cont()
+
+        if not glitching:
+            l.info("Running for a bit...")
+            time.sleep(30.0)
+        print("Time's up! Stopping everything")
+
+    qemu.stop()
+    print("Shutting down Avatar...")
+    avatar.shutdown()

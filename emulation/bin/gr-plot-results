@@ -1,0 +1,92 @@
+#!/usr/bin/env python
+import pickle
+import pprint
+import sys
+import os
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from glitchresistor.emulator import Result
+
+f = open(sys.argv[1], "rb")
+results = pickle.load(f)
+f.close()
+
+if not os.path.exists("figures"):
+    try:
+        os.makedirs("figures")
+    except:
+        print("Could not create directory ('figures').")
+        sys.exit(0)
+
+initial_bytes = results['input']['initial_bytes']
+opcode = "0b"
+for b in initial_bytes:
+    opcode += format(b, '08b')
+
+print("Opcode: %s" % opcode)
+for operation in results:
+    if operation == 'input':
+        continue
+
+    aggergate_results = {}
+    aggergate_total = 0.0
+
+
+    x_axis = []
+    y_axis = {}
+    for r in Result:
+        y_axis[r] = []
+
+    for bits in results[operation]: 
+        x_axis.append(bits)
+
+        total = 0.0
+        for rtn in results[operation][bits]:
+            total += results[operation][bits][rtn]
+            aggergate_total += results[operation][bits][rtn]
+
+            if rtn not in aggergate_results:
+                aggergate_results[rtn] = 1.0
+
+            aggergate_results[rtn] += results[operation][bits][rtn]
+
+        for r in Result:
+            if r not in results[operation][bits]:
+                print r, bits
+                y_axis[r].append(0)
+            else:
+                y_axis[r].append(results[operation][bits][r] / total)
+
+
+
+        print "%d bit flips" % bits
+        for rtn in results[operation][bits]:
+            print "\t%s: %f" % (rtn, results[operation][bits][rtn]/total)
+
+    print "-"*5, "Aggregate", "-"*5
+    for rtn in aggergate_results:
+        print "%s: %f" % (rtn, aggergate_results[rtn] / aggergate_total)
+
+
+    # evenly sampled time at 200ms intervals
+    t = np.arange(0., 5., 0.2)
+
+    plt.figure()
+    # red dashes, blue squares and green triangles
+    for r in Result:
+        plt.plot(x_axis, y_axis[r], '*-', label=r)
+
+    plt.ylabel('Percentage')
+    plt.xlabel('# of bits flipped')
+    plt.title('Results of glitching for %s (%s)' % (results['input']['name'],operation))
+    plt.legend()
+
+    # plt.show()
+    filename = os.path.join('figures','%s.%s.eps' % (results['input']['name'],operation))
+    if os.path.isfile(filename):
+        os.remove(filename)
+    plt.savefig(filename)
+
+    
