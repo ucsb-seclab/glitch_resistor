@@ -51,6 +51,7 @@ REG_FAIL_VALUE = None
 code_initial = None
 bytes_to_trash = None
 flip_operation = None
+force_invalid_ins = False
 
 
 class Architecture(Enum):
@@ -171,11 +172,14 @@ def print_code(uc, address, size, user_data):
     asm = list(CAPSTONE.disasm(code, size))
 
     if len(asm) == 0:
-        sys.stdout.write('>>> 0x{:x}\t{}\tdisasm failure'.format(address, code.encode('hex')))
+        sys.stdout.write('>>> 0x{:x}\t{}\tdisasm failure'.format(address,
+                                                                 code.encode(
+                                                                     'hex')))
     for ins in asm:
-        sys.stdout.write('>>> 0x{:x}\t{}\t{} {}'.format(address, code.encode('hex').ljust(8),
-                                                        ins.mnemonic.ljust(8),
-                                                        ins.op_str.ljust(16)))
+        sys.stdout.write(
+            '>>> 0x{:x}\t{}\t{} {}'.format(address, code.encode('hex').ljust(8),
+                                           ins.mnemonic.ljust(8),
+                                           ins.op_str.ljust(16)))
 
     if EMU_ARCH == UC_ARCH_ARM:
         sp = uc.reg_read(UC_ARM_REG_SP)
@@ -198,7 +202,8 @@ def print_code(uc, address, size, user_data):
         sys.stdout.write('\tR2 = 0x{:08x}'.format(r2)),
         sys.stdout.write('\tR3 = 0x{:08x}'.format(r3)),
         sys.stdout.write('\tR4 = 0x{:08x}'.format(r4)),
-        sys.stdout.write('\tN=%d,Z=%d,C=%d,V=%d,Q=%d' % (flag_n, flag_z, flag_c, flag_v, flag_q))
+        sys.stdout.write('\tN=%d,Z=%d,C=%d,V=%d,Q=%d' % (
+            flag_n, flag_z, flag_c, flag_v, flag_q))
     print()
 
 
@@ -240,7 +245,8 @@ def run_emulator(system_code, instruction_count=50, verbose=False):
         dumpMem(emu, stack_base + 0xfd0, 0x20)
     # Start our emulator
     try:
-        emu.emu_start(START_ADDR, text_base + len(system_code), count=instruction_count)
+        emu.emu_start(START_ADDR, text_base + len(system_code),
+                      count=instruction_count)
 
         if verbose:
             print('\n--- End context ---')
@@ -330,11 +336,12 @@ def test_program(bits_to_flip):
     :param bits_to_flip: the location of the bits to flip
     :return:
     """
-    global code_initial, flip_operation, result_cache
+    global code_initial, flip_operation, result_cache, force_invalid_ins
 
     logger.debug(flip_operation)
 
-    code_input = flip_bits(code_initial, bytes_to_trash, bits_to_flip, flip_operation)
+    code_input = flip_bits(code_initial, bytes_to_trash, bits_to_flip,
+                           flip_operation)
 
     # print code_input
 
@@ -346,6 +353,22 @@ def test_program(bits_to_flip):
     logger.debug(code_input)
     # convert list to str for emulator
     system_code = ''.join(map(chr, code_input))
+
+    if force_invalid_ins:
+        asm = list(CAPSTONE.disasm(system_code, len(code_input)))
+        # logger.info("compiled: {}".format(system_code.encode('hex')))
+        if len(asm) == 0:
+            logger.warning('>>> \tdisasm failure'.format(code.encode('hex')))
+        for ins in asm:
+            # print repr(ins.bytes), len(ins.bytes)
+            # logger.info(
+            #     '>>> {}\t {} {}'.format(binascii.hexlify(ins.bytes),
+            #                             ins.mnemonic,
+            #                             ins.op_str))
+            if ins.bytes == "\x00" * len(ins.bytes) \
+                    or ins.bytes == "\xff" * len(ins.bytes):
+                logger.debug("Forcing invalid instruction")
+                return Result.GLITCH_FAILED_INVALID_INSTRUCTION
 
     # Create a 1 process pool to execute our emulator in (effectively a sandbox for SIGABRT)
     pool = MyPool(processes=1)
@@ -396,7 +419,9 @@ def run_code(code, architecture, nop_bytes=None):
     if len(asm) == 0:
         logger.warning('>>> \tdisasm failure'.format(code.encode('hex')))
     for ins in asm:
-        logger.info('>>> {}\t {} {}'.format(binascii.hexlify(ins.bytes), ins.mnemonic, ins.op_str))
+        logger.info(
+            '>>> {}\t {} {}'.format(binascii.hexlify(ins.bytes), ins.mnemonic,
+                                    ins.op_str))
 
     run_emulator(system_code, verbose=True)
 
@@ -474,7 +499,8 @@ def init_architecture(architecture):
     return True
 
 
-def glitch_code(test_code, architecture, bytes_to_trash_in, flip_type, pool_instances, enable_cache=True):
+def glitch_code(test_code, architecture, bytes_to_trash_in, flip_type,
+                pool_instances, enable_cache=True, force_invalid=False):
     """
 
     :param code:
@@ -483,6 +509,9 @@ def glitch_code(test_code, architecture, bytes_to_trash_in, flip_type, pool_inst
     :return:
     """
     global code_initial, bytes_to_trash, flip_operation, result_cache
+    global force_invalid_ins
+
+    force_invalid_ins = force_invalid
 
     if not enable_cache:
         result_cache = None
@@ -500,7 +529,8 @@ def glitch_code(test_code, architecture, bytes_to_trash_in, flip_type, pool_inst
     if len(asm) == 0:
         logger.warning('>>> \tdisasm failure'.format(code.encode('hex')))
     for ins in asm:
-        logger.info('>>> {}\t{} {}'.format(code.encode('hex'), ins.mnemonic, ins.op_str))
+        logger.info('>>> {}\t{} {}'.format(code.encode('hex'), ins.mnemonic,
+                                           ins.op_str))
 
     flip_operation = flip_type
     flip_type_str = flip_type.name
@@ -518,16 +548,19 @@ def glitch_code(test_code, architecture, bytes_to_trash_in, flip_type, pool_inst
                }
 
     bit_list = range(len(bytes_to_trash) * 8)
-    bit_count = range(len(bytes_to_trash) * 8 + 1) # e.g., 0 to 16 bits to flip to include edge cases
+    bit_count = range(len(
+        bytes_to_trash) * 8 + 1)  # e.g., 0 to 16 bits to flip to include edge cases
     for number_of_bits_to_flip in bit_count:
 
         # Init our results
         results[flip_type_str][number_of_bits_to_flip] = {}
 
         # Let's fire off all of our threads in the pool
-        logger.info("* Trying %d bit flips (%s)..." % (number_of_bits_to_flip, flip_type_str))
+        logger.info("* Trying %d bit flips (%s)..." % (
+            number_of_bits_to_flip, flip_type_str))
         rtn_vals = pool.imap(test_program,
-                             itertools.combinations(bit_list, number_of_bits_to_flip))
+                             itertools.combinations(bit_list,
+                                                    number_of_bits_to_flip))
 
         # Aggregate all of our results
         for rtn in rtn_vals:
@@ -539,7 +572,8 @@ def glitch_code(test_code, architecture, bytes_to_trash_in, flip_type, pool_inst
         # Let's print them at each iteration to have some idea of progress
         # pprint.pprint(results[flip_type_str][number_of_bits_to_flip])
 
-        logger.info(pprint.pformat(results[flip_type_str][number_of_bits_to_flip]))
+        logger.info(
+            pprint.pformat(results[flip_type_str][number_of_bits_to_flip]))
         # logger.info(pprint.pformat(results))
 
         result_cache = {}

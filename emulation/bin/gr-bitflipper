@@ -39,6 +39,9 @@ if __name__ == '__main__':
                         help="Directory to store results in.")
     parser.add_argument('--pool_instances', '-p', default=None, type=int,
                         help="Number processes to create in pool. (Default: # of cores)")
+    parser.add_argument('--force_invalid', default=False, action='store_true',
+                        help="Force both 0xFFFFFFFF and 0x0000000 to be " \
+                             "invalid instructions.")
     args = parser.parse_args()
 
     # Do all of our checks!
@@ -99,7 +102,9 @@ if __name__ == '__main__':
     flip_type_str = flip_type.name
     flip_operation = flip_type
     results.update(
-        glitch_code(test_code, args.architecture, bytes_to_trash, flip_type, args.pool_instances, args.no_cache))
+        glitch_code(test_code, args.architecture, bytes_to_trash, flip_type,
+                    args.pool_instances, args.no_cache,
+                    force_invalid=args.force_invalid))
 
     results['input'].update({'code': test_code,
                              'bytes_to_trash': bytes_to_trash,

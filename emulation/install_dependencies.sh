@@ -31,7 +31,7 @@ cd .. # keystone
 cd bindings
 make
 cd python
-sudo python setup.py install --verbose
+python setup.py install --verbose
 cd .. # bindings
 cd .. # keystone
 cd .. # ./

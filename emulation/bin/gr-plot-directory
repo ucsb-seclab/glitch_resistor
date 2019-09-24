@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 import os
 import pickle
 import pprint
@@ -25,23 +25,26 @@ if not os.path.exists("figures"):
 
 all_results = {}
 
-x_axis = []
+x_axis = {}
 y_axis = {}
 
 for results_file in onlyfiles:
     results_file_path = os.path.join(path, results_file)
 
-    print
-    "* Reading %s..." % results_file_path
+    print "* Reading %s..." % results_file_path
     f = open(results_file_path, "rb")
     results = pickle.load(f)
     f.close()
 
-    x_axis.append(results['input']['name'])
-
     print(results['input']['name'], get_opcode_from_results(results))
 
     for operation in results:
+
+        if operation not in x_axis:
+            x_axis[operation] = []
+        x_axis[operation].append(results['input']['name'])
+
+
         if operation == 'input' or operation == "XOR":
             continue
 
@@ -126,9 +129,9 @@ label_map = {
 
 line_rotate = ['.-', ',-', 'o-', 'v-', '^-', '*-', '+-', 'x-']
 for operation in y_axis:
-    xvalues = np.arange(len(x_axis))
+    xvalues = np.arange(len(x_axis[operation]))
 
-    last = np.zeros(len(x_axis))
+    last = np.zeros(len(x_axis[operation]))
 
     sum0 = 0
     plt.figure()
@@ -145,8 +148,8 @@ for operation in y_axis:
         plt.bar(xvalues, y_axis[operation][r], label=bar_label, bottom=last, color=color_map[r])
         last += y_axis[operation][r]
 
-    x_axis = [x.split(".")[0].upper() for x in x_axis]
-    plt.xticks(xvalues+.25, x_axis)
+    x_axis_lbl = [x.split(".")[0].upper() for x in x_axis[operation]]
+    plt.xticks(xvalues+.25, x_axis_lbl)
     plt.tick_params(
         axis='x',  # changes apply to the x-axis
         which='both',  # both major and minor ticks are affected
@@ -155,6 +158,8 @@ for operation in y_axis:
         labelbottom=True)  # labels along the bottom edge are off
     plt.ylabel('Percentage of Results', fontsize=20)
     plt.xlabel('Instruction', fontsize=20)
+    plt.xlim([0, len(xvalues)])
+    plt.ylim([0, 1])
     # plt.title('Aggregate results for each instruction (%s)' % operation)
     plt.legend(loc="best")
     filename = os.path.join('figures', 'aggregate_histogram_%s.eps' % operation)
@@ -176,7 +181,8 @@ for operation in y_axis:
         plt.ylim(0,1)
         plt.ylabel('Success Rate',fontsize=20)
         plt.xlabel('# of 1s in Bitmask',fontsize=20)
-
+        plt.xlim([0, len(x)-1])
+        plt.ylim([0, 1])
         line_idx += 1
         line_idx %= len(line_rotate)
     #    plt.show()
