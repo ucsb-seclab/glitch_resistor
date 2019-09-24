@@ -13,14 +13,17 @@ from glitchresistor.emulator import Result
 from glitchresistor.glitchresistor import get_opcode_from_results
 
 path = sys.argv[1]
+
+figures_dir = path.strip("/") + "_figures"
+
 onlyfiles = [f for f in listdir(path) if isfile(join(sys.argv[1], f))]
 onlyfiles = [f for f in onlyfiles if f.endswith("pickle")]
 
-if not os.path.exists("figures"):
+if not os.path.exists(figures_dir):
     try:
-        os.makedirs("figures")
+        os.makedirs(figures_dir)
     except:
-        print("Could not create directory ('figures').")
+        print("Could not create directory ('%s')." % figures_dir)
         sys.exit(0)
 
 all_results = {}
@@ -43,7 +46,6 @@ for results_file in onlyfiles:
         if operation not in x_axis:
             x_axis[operation] = []
         x_axis[operation].append(results['input']['name'])
-
 
         if operation == 'input' or operation == "XOR":
             continue
@@ -74,14 +76,15 @@ for results_file in onlyfiles:
                 else:
 
                     aggregate_fail[bits] += results[operation][bits][rtn]
-            # print "%d bit flips" % bits
-            # for rtn in results[operation][bits]:
-            #     print "\t%s: %f" % (rtn, results[operation][bits][rtn]/total)
+                    # print "%d bit flips" % bits
+                    # for rtn in results[operation][bits]:
+                    #     print "\t%s: %f" % (rtn, results[operation][bits][rtn]/total)
 
         # print("-" * 5, "Aggregate", "-" * 5)
 
         for bits in aggregate_success:
-            aggregate_success[bits] = aggregate_success[bits] / (aggregate_success[bits] + aggregate_fail[bits])
+            aggregate_success[bits] = aggregate_success[bits] / (
+            aggregate_success[bits] + aggregate_fail[bits])
             # print("%s: %f" % (rtn, aggergate_results[rtn] / aggergate_total))
 
         if operation not in y_axis:
@@ -92,7 +95,8 @@ for results_file in onlyfiles:
             if r not in aggergate_results:
                 y_axis[operation][r].append(0)
             else:
-                y_axis[operation][r].append(aggergate_results[r] / aggergate_total)
+                y_axis[operation][r].append(
+                    aggergate_results[r] / aggergate_total)
 
         # Add to all results dict
         if results['input']['name'] not in all_results:
@@ -145,11 +149,12 @@ for operation in y_axis:
         sum0 += y_axis[operation][r][0]
 
         bar_label = label_map[r]
-        plt.bar(xvalues, y_axis[operation][r], label=bar_label, bottom=last, color=color_map[r])
+        plt.bar(xvalues, y_axis[operation][r], label=bar_label, bottom=last,
+                color=color_map[r])
         last += y_axis[operation][r]
 
     x_axis_lbl = [x.split(".")[0].upper() for x in x_axis[operation]]
-    plt.xticks(xvalues+.25, x_axis_lbl)
+    plt.xticks(xvalues, x_axis_lbl)
     plt.tick_params(
         axis='x',  # changes apply to the x-axis
         which='both',  # both major and minor ticks are affected
@@ -158,11 +163,13 @@ for operation in y_axis:
         labelbottom=True)  # labels along the bottom edge are off
     plt.ylabel('Percentage of Results', fontsize=20)
     plt.xlabel('Instruction', fontsize=20)
-    plt.xlim([0, len(xvalues)])
+    plt.xlim([-.5, len(xvalues) - .5])
     plt.ylim([0, 1])
     # plt.title('Aggregate results for each instruction (%s)' % operation)
-    plt.legend(loc="best")
-    filename = os.path.join('figures', 'aggregate_histogram_%s.eps' % operation)
+    plt.tight_layout()
+    plt.legend(loc="best",fontsize=15)
+    filename = os.path.join(figures_dir,
+                            'aggregate_histogram_%s.eps' % operation)
     plt.savefig(filename)
 
     # One plot with all of the success rates
@@ -178,14 +185,14 @@ for operation in y_axis:
             x.append(int(bits))
             y.append(all_results[file][operation][bits])
         plt.plot(x, y, line_rotate[line_idx], label=line_name)
-        plt.ylim(0,1)
-        plt.ylabel('Success Rate',fontsize=20)
-        plt.xlabel('# of 1s in Bitmask',fontsize=20)
-        plt.xlim([0, len(x)-1])
+        plt.ylim(0, 1)
+        plt.ylabel('Success Rate', fontsize=20)
+        plt.xlabel('# of 1s in Bitmask', fontsize=20)
+        plt.xlim([0, len(x) - 1])
         plt.ylim([0, 1])
         line_idx += 1
         line_idx %= len(line_rotate)
-    #    plt.show()
-    plt.legend(loc="best")
-    filename = os.path.join('figures', 'aggregate_lines_%s.eps' % operation)
+    # plt.show()
+    plt.legend(loc="best", fontsize=12)
+    filename = os.path.join(figures_dir, 'aggregate_lines_%s.eps' % operation)
     plt.savefig(filename)
