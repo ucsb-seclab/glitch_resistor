@@ -17,7 +17,7 @@ PLATFORM = 'CW308_STM32F0'
 CRYPTO_TARGET = 'NONE'
 SUCCESS_OUTPUT = "Yes!"
 fw_dir = "cw_glitching"
-fw_path = "build/cw_glitching.hex"
+fw_path = os.path.join(fw_dir, "build/cw_glitching.hex")
 
 
 def build_firmware(directory, function="LOOP"):
@@ -28,9 +28,11 @@ def build_firmware(directory, function="LOOP"):
     :return:
     """
     from subprocess import call
+    cwd = os.getcwd()
     os.chdir(directory)
     call(["make", "clean"])
     rtn = call(["make", "FUNC_SEL=%s" % function])
+    os.chdir(cwd)
 
     return rtn == 0
 
@@ -129,11 +131,15 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                             logger.info("Got a success!")
                             success_result = response
                             successes += 1
+                        else:
+                            failed_glitches += 1
 
                     # Save our successful glitches
-                    params = [scope.glitch.width, scope.glitch.offset,
-                              successes / sample_size,
-                              repr(success_result), ext_offset]
+                    # Save our successful glitches
+                    params = [scope.glitch.ext_offset, scope.glitch.width,
+                              scope.glitch.offset,
+                              successes, partial_successes, sample_size,
+                              success_result]
 
                     # Did we have any successes?
                     if successes > 0 or partials > 0:
@@ -152,7 +158,7 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
 def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                     multi_glitch=False, stop_at_optimal=False,
                     max_depth=6):
-    global partial_successes
+    global partial_successes, failed_glitches
     if depth > max_depth:
         return False
 
@@ -186,22 +192,28 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                         partials += 1
                         partial_successes += 1
                         if success_result == "":
-                            success_result = repr(response)
+                            success_result = response
 
                     # Check for glitch success
-                    if SUCCESS_OUTPUT in repr(response):
+                    elif SUCCESS_OUTPUT in repr(response):
                         logger.info("Got a success!")
                         success_result = response
                         successes += 1
 
+                    else:
+                        failed_glitches += 1
+
                 # Save our successful glitches
-                params = [ext_offset, scope.glitch.width, scope.glitch.offset,
+                params = [scope.glitch.ext_offset, scope.glitch.width,
+                          scope.glitch.offset,
                           successes, partial_successes, sample_size,
-                          repr(success_result)]
+                          success_result]
 
                 # Are we searching for the most optimal solution?
                 if successes == sample_size and stop_at_optimal:
                     return params
+
+
 
                 # Did we have any successes?
                 if successes > 0 or partials > 0:
@@ -235,6 +247,7 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
 
                         if rtn is not False:
                             return rtn
+
     return False
 
 
@@ -281,122 +294,131 @@ if __name__ == "__main__":
 
     successful_glitches = []
     partial_successes = 0
+    failed_glitches = 0
+
+    multi_glitch = False
+    repeat = 10
+    max_depth = 6
+    stop_at_optimal = False
+    repeats = []
 
     # Find optimal glitch parameters
-    if args.experiment == "optimal":
+    if args.experiment == "single_optimal":
 
-        # Build and flash our firmware
-        if not build_firmware(fw_dir):
-            logger.error("Could not build firmware")
-        cw.program_target(scope, prog, fw_path)
-
-        # Run the firmware once
-        response = run_firmware(arm=False)
-        print("Benign result: ", response)
-
+        function_name = "SINGLE"
         sample_size = 10
-        optimial_params = optimize_glitch(range(0, 10),
-                                          numpy.arange(-49, 49, 1),
-                                          numpy.arange(-49, 49, 1),
-                                          repeat=10,
-                                          stop_at_optimal=True)
-
-        print("Found optimal params:", optimial_params)
-
-        pprint.pprint(successful_glitches)
-
-    if args.experiment == "store":
-
-        # Build and flash our firmware
-        if not build_firmware(fw_dir, function="NOZERO"):
-            logger.error("Could not build firmware")
-        cw.program_target(scope, prog, fw_path)
-
-        # Run the firmware once
-        response = run_firmware(arm=False)
-        print("Benign result: ", response)
-
-        sample_size = 1
-        optimial_params = optimize_glitch(range(0, 10),
-                                          numpy.arange(-49, 49, 1),
-                                          numpy.arange(-49, 49, 1),
-                                          repeat=1,
-                                          stop_at_optimal=False,
-                                          max_depth=2)
-
-        print("Found optimal params:", optimial_params)
-
-        pprint.pprint(successful_glitches)
+        ext_offsets = range(0, 10)
+        widths = numpy.arange(-49, 49, 1)
+        offsets = numpy.arange(-49, 49, 1)
+        stop_at_optimal = True
+        multi_glitch = False
+        repeat = 10
+        max_depth = 6
     # Single glitch
     elif args.experiment == "single":
 
-        # Build and flash our firmware
-        if not build_firmware(fw_dir):
-            logger.error("Could not build firmware")
-        cw.program_target(scope, prog, fw_path)
-
-        # Run the firmware once
-        response = run_firmware(arm=False)
-        print("Benign result: ", response)
-
+        function_name = "SINGLE"
         sample_size = 1
-        optimial_params = optimize_glitch(range(0, 10),  # range(37, 37 + 8,
-                                          #  1),
-                                          numpy.arange(-49, 49, 1),
-                                          numpy.arange(-49, 49, 1),
-                                          repeat=1)
+        ext_offsets = range(0, 10)
+        widths = numpy.arange(-49, 49, 1)
+        offsets = numpy.arange(-49, 49, 1)
+        stop_at_optimal = False
+        multi_glitch = False
+        repeat = 1
 
-        print("Found optimal params:", optimial_params)
+    elif args.experiment == "store":
 
-        pprint.pprint(successful_glitches)
+        function_name = "NOZERO"
+        sample_size = 1
+        ext_offsets = range(0, 10)
+        widths = numpy.arange(-49, 49, 1)
+        offsets = numpy.arange(-49, 49, 1)
+        stop_at_optimal = False
+        multi_glitch = False
+        repeat = 1
 
+    elif args.experiment == "store_optimal":
+
+        function_name = "NOZERO"
+        sample_size = 10
+        ext_offsets = [0]
+        widths = numpy.arange(-49, 49, 1)
+        offsets = numpy.arange(-49, 49, 1)
+        stop_at_optimal = True
+        multi_glitch = False
+        max_depth = 6
+        repeat = 10
 
     # Multi-glitch
     elif args.experiment == "multi":
 
-        # Build and flash our firmware
-        if not build_firmware(fw_dir, function="DOUBLE"):
-            logger.error("Could not build firmware")
-        cw.program_target(scope, prog, fw_path)
-
-        # Run the firmware once
-        benign = run_firmware(arm=True, multi_glitch=True)
-        print("Benign result: ", benign)
-
+        function_name = "DOUBLE"
         sample_size = 1
-        optimial_params = optimize_glitch(range(0, 10),
-                                          numpy.arange(-49, 49, 1),
-                                          numpy.arange(-49, 49, 1),
-                                          repeat=1,
-                                          multi_glitch=True)
-
-        print("Found optimal params:", optimial_params)
-
-        pprint.pprint(successful_glitches)
-        print("Partials: ", partial_successes)
+        ext_offsets = range(0, 10)
+        widths = numpy.arange(-49, 49, 1)
+        offsets = numpy.arange(-49, 49, 1)
+        multi_glitch = True
+        repeat = 1
 
     elif args.experiment == "long":
-
-        # Build and flash our firmware
-        if not build_firmware(fw_dir, function="LONG"):
-            logger.error("Could not build firmware")
-        cw.program_target(scope, prog, fw_path)
-
-        # Run the firmware once
-        benign = run_firmware(arm=False, multi_glitch=False)
-        print("Benign result: ", benign)
-
+        function_name = "LONG"
         sample_size = 1
-        long_glitch([0],  # range(37, 37 + 8, 1),
-                                      numpy.arange(-10, 10, 1),
-                                      numpy.arange(-49, 30, 1),
-                                      range(100, 10, -10))
+        ext_offsets = [0]
+        widths = numpy.arange(-49, 49, 1)
+        offsets = numpy.arange(-49, 49, 1)
+        repeats = range(30, 10, -2)
 
-        pprint.pprint(successful_glitches)
-        print("Partials: ", partial_successes)
+    else:
+        logger.error("Invalid experiment name (%s)!" % args.experiment)
+        sys.exit(0)
+
+    # Build and flash our firmware
+    if not build_firmware(fw_dir, function=function_name):
+        logger.error("Could not build firmware")
+    cw.program_target(scope, prog, fw_path)
+
+    # Run the firmware once
+    benign = run_firmware(arm=False, multi_glitch=False)
+    print("Benign result: ", benign)
+
+    time_start = time.time()
+    optimal_params = None
+    if args.experiment == "long":
+        long_glitch(ext_offsets,  # range(37, 37 + 8, 1),
+                    widths,
+                    offsets,
+                    repeats)
+    else:
+        optimal_params = optimize_glitch(ext_offsets,
+                                         numpy.arange(-49, 50, 1),
+                                         numpy.arange(-49, 50, 1),
+                                         repeat=repeat,
+                                         multi_glitch=multi_glitch,
+                                         stop_at_optimal=stop_at_optimal)
+
+    pprint.pprint(successful_glitches)
+    print("Partials: ", partial_successes)
 
     scope.dis()
     target.dis()
 
     print("* Saving output to %s..." % args.output)
-    pickle.dump(successful_glitches, open(args.output, "wb"))
+    output = {
+        'parameters': {
+            'function_name': function_name,
+            'sample_size': sample_size,
+            'ext_offsets': ext_offsets,
+            'widths': widths,
+            'offsets': offsets,
+            'stop_at_optimal': stop_at_optimal,
+            'multi_glitch': multi_glitch,
+            'repeat': repeat,
+            'max_depth': max_depth,
+            'repeats': repeats,
+            'time_elapsed': time.time()-time_start
+        },
+        'optimal': optimal_params,
+        'failures': failed_glitches,
+        'successes': successful_glitches}
+    pprint.pprint(output)
+    pickle.dump(output, open(args.output, "wb"))

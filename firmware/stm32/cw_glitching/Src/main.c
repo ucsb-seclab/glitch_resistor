@@ -38,7 +38,7 @@ void glitch1(void) {
     ;
   }
   asm("mov r0, r3");
-  asm("bl putch");
+  asm("bl putint");
   putch('\n');
   uart_puts("Yes!");
   putch('\n');
@@ -57,18 +57,18 @@ void glitch1(void) {
 
 void glitch_fixed(void) {
   // Some fake variable
-  volatile uint8_t a = 0xAA;
+  volatile uint32_t a = 3889321827;
 
   // Trigger
   *PIN_HIGH = TRIGGER_PIN;
   *PIN_LOW = TRIGGER_PIN;
 
   // Infinite loop
-  while (a != 0x55) {
+  while (a != 3552161478) {
     ;
   }
-  asm("mov r0, r3");
-  asm("bl putch");
+  asm("mov r0, r2");
+  asm("bl putint");
   putch('\n');
   uart_puts("Yes!");
   putch('\n');
@@ -87,14 +87,14 @@ void glitch_fixed(void) {
 
 void multi_glitch(void) {
   // Some fake variable
-  volatile uint8_t a = 0;
+  volatile uint8_t a = 1;
 
   // Trigger
   *PIN_HIGH = TRIGGER_PIN;
   *PIN_LOW = TRIGGER_PIN;
 
   // Infinite loop
-  while (a != 2) {
+  while (a != 0) {
     ;
   }
   asm("nop");
@@ -111,11 +111,11 @@ void multi_glitch(void) {
   asm("nop");
   asm("nop");
 
+  asm("mov r0, r3");
+  asm("bl putint");
+  putch('\n');
   uart_puts("Yes1!");
   putch('\n');
-  putch(a);
-  putch('\n');
-
   for (int i = 0; i < 100000; i++) {
     asm("nop");
   }
@@ -123,9 +123,13 @@ void multi_glitch(void) {
   *PIN_HIGH = TRIGGER_PIN;
   *PIN_LOW = TRIGGER_PIN;
 
-  while (a != 2) {
+  while (a != 0) {
     ;
   }
+
+  asm("mov r0, r3");
+  asm("bl putint");
+  putch('\n');
   uart_puts("Yes!");
   putch('\n');
   putch(a);
@@ -191,20 +195,20 @@ int main(void) {
 #endif
 
   while (1) {
-#ifdef LOOP
-    uart_puts("single");
+#ifdef SINGLE
+    uart_puts("single\n");
     glitch1();
 #endif
 #ifdef NOZERO
-    uart_puts("nozero");
+    uart_puts("nozero\n");
     glitch_fixed();
 #endif
 #ifdef DOUBLE
-    uart_puts("multi");
+    uart_puts("multi\n");
     multi_glitch();
 #endif
 #ifdef LONG
-    uart_puts("long");
+    uart_puts("long\n");
     long_glitch();
 #endif
   }

@@ -10,6 +10,7 @@
 void init_uart(void);
 void putch(char c);
 char getch(void);
+void putint(unsigned int i);
 
 void trigger_setup(void);
 void trigger_low(void);

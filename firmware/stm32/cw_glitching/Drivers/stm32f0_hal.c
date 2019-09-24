@@ -100,3 +100,8 @@ void putch(char c) {
     HAL_UART_Transmit(&UartHandle, &d, 1, 5000);
 }
 
+void putint(unsigned int i) {
+    unsigned int d = i;
+    HAL_UART_Transmit(&UartHandle, (uint8_t *)&d, 4, 5000);
+}
+
