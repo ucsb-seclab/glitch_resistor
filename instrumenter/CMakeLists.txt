@@ -40,6 +40,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
 
 add_subdirectory(CommonInstrumentationUtils)
 add_subdirectory(LoopProtector)
+add_subdirectory(RecheckLoopProtector)
 add_subdirectory(DelayInjector)
 add_subdirectory(RetProtector)
 add_subdirectory(BranchProtector)
