@@ -1,19 +1,28 @@
 #include<stdio.h>
+#include<stdlib.h>
 
-static int a(int i) {
-if (i > 0) {
+__attribute__((noinline))
+static int c() {
+  if(rand() % 2 == 0)
+    return 0;
+  else 
+    return 1;
+}
+
+__attribute__((noinline))
+static int a() {
     printf("hello");
     return 0;
-} else {
-	return 1;
 }
-}
+__attribute__((noinline))
 static int b() {
     printf("goodbye");
     return 1;
 }
 int main() {
-    volatile int i = 1;
-    if(!a(i) && b())
+    int i;
+    if(!a() && b())
       printf("The beetles say");
+    if(c())
+      printf("c");
 }
