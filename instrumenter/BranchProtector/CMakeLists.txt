@@ -1,6 +1,8 @@
 add_library(BranchProtector MODULE src/BranchProtectorPass.cpp)
 
-include_directories(include)
+include_directories(include ../CommonInstrumentationUtils/include)
+
+target_link_libraries(BranchProtector CommonInstrumentationUtils)
 
 target_compile_features(BranchProtector PRIVATE cxx_range_for cxx_auto_type)
 
