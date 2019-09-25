@@ -5,7 +5,7 @@
 #include "BranchProtectorUtil.h"
 
 static bool Verbose = false;
-static std::string TAG = "BranchProtectorUtil";
+static std::string TAG = "\033[1;31m[GR/BranchUtil]\033[0m ";
 
 static bool canReplicate(Instruction *currIn);
 static bool canReplicateOperands(Instruction *currIn);
@@ -52,6 +52,19 @@ static bool canReplicateOperands(Instruction *currIn) {
   // it should not be a call or a load or constant instruction.
   return !(dyn_cast<CallInst>(currIn) || dyn_cast<LoadInst>(currIn) ||
            dyn_cast<Constant>(currIn));
+}
+
+/***
+ * This function checks if the provided instruction can be replicated as a
+ * value. This used to negate operands in our branch
+ *
+ * @param currIn Instruction to check.
+ * @return true if the operands can be replicated.
+ */
+bool canReplicateValue(Instruction *currIn) {
+  // it should not be a call or a load or constant instruction.
+  // TODO: Figure out exactly what we should be checking for here.
+  return !(dyn_cast<CallInst>(currIn) || dyn_cast<LoadInst>(currIn));
 }
 
 /***
@@ -140,31 +153,48 @@ static bool duplicateInstructions(IRBuilder<> &builder,
         Value *op1 = currICMPInstr->getOperand(0);
         Value *op2 = currICMPInstr->getOperand(1);
 
+        // Make sure that we won't cause any issues when we replicate these
+        // values
+        bool replicatable = false;
+
         // see if these are already replicated? if yes, get the replicated
         // copies.
+        if (Verbose)
+          op1->dump();
         if (Instruction *opInstr = dyn_cast<Instruction>(op1)) {
+          if (Verbose)
+            errs() << "Replicatable " << canReplicateValue(opInstr) << "\n";
+          replicatable |= canReplicateValue(opInstr);
           if (replicatedInstrs.find(opInstr) != replicatedInstrs.end()) {
             op1 = replicatedInstrs[opInstr];
           }
         }
 
+        if (Verbose)
+          op2->dump();
         if (Instruction *opInstr = dyn_cast<Instruction>(op2)) {
+          if (Verbose)
+            errs() << "Replicatable " << canReplicateValue(opInstr) << "\n";
+          replicatable |= canReplicateValue(opInstr);
           if (replicatedInstrs.find(opInstr) != replicatedInstrs.end()) {
             op2 = replicatedInstrs[opInstr];
           }
         }
 
-        // Now, negate them.
-        Value *xorOp1 =
-            builder.CreateBinOp(Instruction::BinaryOps::Xor, op1,
-                                ConstantInt::get(op1->getType(), ~0));
-        Value *xorOp2 =
-            builder.CreateBinOp(Instruction::BinaryOps::Xor, op2,
-                                ConstantInt::get(op2->getType(), ~0));
+        if (replicatable) {
+          errs() << TAG << "Negated.\n";
+          // Now, negate them. (When possible)
+          Value *xorOp1 =
+              builder.CreateBinOp(Instruction::BinaryOps::Xor, op1,
+                                  ConstantInt::get(op1->getType(), ~0));
+          Value *xorOp2 =
+              builder.CreateBinOp(Instruction::BinaryOps::Xor, op2,
+                                  ConstantInt::get(op2->getType(), ~0));
 
-        // replace the operands with Xored operands.
-        newInstr->replaceUsesOfWith(currICMPInstr->getOperand(0), xorOp1);
-        newInstr->replaceUsesOfWith(currICMPInstr->getOperand(1), xorOp2);
+          // replace the operands with Xored operands.
+          newInstr->replaceUsesOfWith(currICMPInstr->getOperand(0), xorOp1);
+          newInstr->replaceUsesOfWith(currICMPInstr->getOperand(1), xorOp2);
+        }
       }
     }
     if (LoadInst *LI = dyn_cast<LoadInst>(currIn)) {
