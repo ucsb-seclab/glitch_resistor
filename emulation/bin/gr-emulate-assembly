@@ -1,0 +1,160 @@
+#!/usr/bin/python
+import argparse
+import logging
+import os
+import sys
+from keystone import *
+from unicorn import *
+from unicorn.arm_const import *
+from capstone import *
+from capstone.arm import *
+from capstone.x86 import *
+
+
+
+# callback for tracing instructions
+from glitchresistor.emulator import glitch_code, Architecture, run_code
+from glitchresistor.glitchresistor import parse_config_from_file
+
+
+def hook_code(uc, address, size, user_data):
+    # global cs
+    # print 'address = 0x{:x}, size = {}'.format(address, size)
+    code = uc.mem_read(address, size)
+    code = ''.join(map(chr, code))
+    asm = list(cs.disasm(code, size))
+
+
+    if len(asm) == 0:
+        print '>>> 0x{:x}\t{}\tdisasm failure'.format(address, code.encode('hex')),
+    for ins in asm:
+        print '>>> 0x{:x}\t{}\t{} {}'.format(address, code.encode('hex').ljust(8),
+                                             ins.mnemonic.ljust(8),
+                                             ins.op_str.ljust(16)),
+
+    sp = uc.reg_read(UC_ARM_REG_SP)
+    pc = uc.reg_read(UC_ARM_REG_PC)
+    lr = uc.reg_read(UC_ARM_REG_LR)
+    r0 = uc.reg_read(UC_ARM_REG_R0)
+    r1 = uc.reg_read(UC_ARM_REG_R1)
+    r2 = uc.reg_read(UC_ARM_REG_R2)
+    r3 = uc.reg_read(UC_ARM_REG_R3)
+    r4 = uc.reg_read(UC_ARM_REG_R4)
+    cpsr = uc.reg_read(UC_ARM_REG_CPSR)
+    flag_n = 1 if 1 << 31 & cpsr != 0 else 0
+    flag_z = 1 if 1 << 30 & cpsr != 0 else 0
+    flag_c = 1 if 1 << 29 & cpsr != 0 else 0
+    flag_v = 1 if 1 << 28 & cpsr != 0 else 0
+    flag_q = 1 if 1 << 27 & cpsr != 0 else 0
+    print '\t|',
+    print '\tR0 = 0x{:08x}'.format(r0),
+    print '\tR1 = 0x{:08x}'.format(r1),
+    print '\tR2 = 0x{:08x}'.format(r2),
+    print '\tR3 = 0x{:08x}'.format(r3),
+    print '\tR4 = 0x{:08x}'.format(r4),
+    print('\tN=%d,Z=%d,C=%d,V=%d,Q=%d' % (flag_n, flag_z, flag_c, flag_v, flag_q))
+    dumpMem(emu, stack_base + 0xfd0, 0x20)
+
+def hook_intr(uc, intno, user_data):
+    pass
+    #print 'Interrupt 0x{:x}'.format(intno)
+
+
+def dumpSimple(mu):
+    sp = mu.reg_read(UC_ARM_REG_SP)
+    pc = mu.reg_read(UC_ARM_REG_PC)
+    lr = mu.reg_read(UC_ARM_REG_LR)
+    r0 = mu.reg_read(UC_ARM_REG_R0)
+    r1 = mu.reg_read(UC_ARM_REG_R1)
+    r2 = mu.reg_read(UC_ARM_REG_R2)
+    r3 = mu.reg_read(UC_ARM_REG_R3)
+    print 'SP = 0x{:08x}'.format(sp)
+    print 'PC = 0x{:08x}'.format(pc)
+    print 'LR = 0x{:08x}'.format(lr)
+    print 'R0 = 0x{:08x}'.format(r0)
+    print 'R1 = 0x{:08x}'.format(r1)
+    print 'R2 = 0x{:08x}'.format(r2)
+    print 'R3 = 0x{:08x}'.format(r3)
+
+
+def dumpMem(mu, addr, size):
+    x = mu.mem_read(addr, size)
+    x = ''.join(map(chr, x))
+    wrap = 16
+    group = 4
+    for i in xrange(0, len(x), wrap):
+        k = i + wrap if i + wrap < len(x) else len(x)
+        sys.stdout.write('0x{:x} | '.format(addr + i))
+        for j in xrange(i, k):
+            sys.stdout.write('{}'.format(x[j].encode('hex')))
+            if j % group == group - 1: sys.stdout.write(' ')
+        sys.stdout.write('\n')
+
+
+# print '\n--- Dead listing ---'
+# asm = list(cs.disasm(thumb_code, len(thumb_code)))
+# for ins in asm:
+#     print '>>> {} {}'.format(ins.mnemonic, ins.op_str)
+
+
+if __name__ == '__main__':
+
+    # Get user input
+    parser = argparse.ArgumentParser()
+    parser.add_argument("source_code", help="Assembly source file.")
+    parser.add_argument('--data_offset', "-o", default=0, type=int,
+                        help="Number of bytes of data defined at the beginning of the source.")
+    parser.add_argument('--count','-c', default=50, type=int,
+                        help="Number of instructions to execute (default: 50)")
+    parser.add_argument('--architecture', '-A', default=Architecture.ARM_THUMB, type=int,
+                        help="Options: %s" % [(v.value, v.name) for v in Architecture])
+    parser.add_argument('--debug', '-d', default=False, action='store_true')
+    parser.add_argument('--nop', default=False, action='store_true',
+                        help="NOP out the glitch bytes specified in the file header.")
+    args = parser.parse_args()
+
+    # Do all of our checks!
+    if not os.path.exists(args.source_code):
+        print("Source file (%s) does not exist." % args.sample)
+        sys.exit()
+
+    # Setup Logging
+    logging.basicConfig()
+    l = logging.getLogger()
+    if args.debug:
+        l.setLevel(logging.DEBUG)
+    else:
+        l.setLevel(logging.INFO)
+
+    args.architecture = Architecture(args.architecture)
+
+
+
+    data_offset = args.data_offset
+    instruction_count = args.count
+    # the program
+    f = open(args.source_code, "r")
+    code = f.read()
+    f.close()
+
+    bytes_to_trash = None
+
+    config_dict = parse_config_from_file(code)
+    if "bytes_to_trash" in config_dict and args.nop:
+        print("* Using bytes to corrupt from file (%s)" % args.source_code)
+        config_bytes = config_dict['bytes_to_trash']
+        bytes_to_trash = [int(x) for x in config_bytes.split(",")]
+    else:
+        print("* No bytes were specified to glitch in the file")
+
+    if "arch" in config_dict:
+        print("* Architecture defined in file! (%s)" % config_dict['arch'])
+        args.architecture = Architecture(config_dict['arch'])
+
+
+    print("Code:\n%s" % code)
+    print("Bytes to NOP: %s" % bytes_to_trash)
+    print("Architecture: %s" % args.architecture)
+
+    run_code(code, args.architecture, nop_bytes=bytes_to_trash)
+
