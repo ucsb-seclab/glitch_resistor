@@ -4,23 +4,23 @@
 
 #include "BranchProtectorUtil.h"
 
-
 static bool Verbose = false;
 static std::string TAG = "BranchProtectorUtil";
 
 static bool canReplicate(Instruction *currIn);
 static bool canReplicateOperands(Instruction *currIn);
-static bool recursivelyGetInstructionsToReplicate(Instruction *currInstr, std::vector<Instruction *> &allInstrs);
-static bool getAllInstrToReplicate(BranchInst &targetInstr, std::vector<Instruction *> &allInstrs);
-static bool duplicateInstructions(IRBuilder<> &builder, BranchInst &targetBrInst, std::vector<Instruction *> &allInstrs);
+static bool
+recursivelyGetInstructionsToReplicate(Instruction *currInstr,
+                                      std::vector<Instruction *> &allInstrs);
+static bool getAllInstrToReplicate(BranchInst &targetInstr,
+                                   std::vector<Instruction *> &allInstrs);
+static bool duplicateInstructions(IRBuilder<> &builder,
+                                  BranchInst &targetBrInst,
+                                  std::vector<Instruction *> &allInstrs);
 
-void setVerbose(bool v) {
-  Verbose = v;
-}
+void setVerbose(bool v) { Verbose = v; }
 
-void setTag(std::string tagN) {
-  TAG = tagN;
-}
+void setTag(std::string tagN) { TAG = tagN; }
 
 /***
  * This function checks if the provided instruction can be replicated.
@@ -85,8 +85,8 @@ recursivelyGetInstructionsToReplicate(Instruction *currInstr,
           if (Instruction *CI = dyn_cast<Instruction>(currOp)) {
             if (canReplicate(CI)) {
               hasInstrInserted =
-                recursivelyGetInstructionsToReplicate(CI, allInstrs) ||
-                hasInstrInserted;
+                  recursivelyGetInstructionsToReplicate(CI, allInstrs) ||
+                  hasInstrInserted;
             } else if (Verbose) {
               errs() << TAG << "Skipping " << *CI << "\n";
             }
@@ -116,7 +116,6 @@ static bool getAllInstrToReplicate(BranchInst &targetInstr,
   return false;
 }
 
-
 /***
  * Duplicate all the instructions at the provided insertion point.
  * @param builder point at which the instruction needs to be inserted.
@@ -126,20 +125,23 @@ static bool getAllInstrToReplicate(BranchInst &targetInstr,
  * replicated.
  * @return true if the insertion is successful.
  */
-static bool duplicateInstructions(IRBuilder<> &builder, BranchInst &targetBrInst,
-                           std::vector<Instruction *> &allInstrs) {
+static bool duplicateInstructions(IRBuilder<> &builder,
+                                  BranchInst &targetBrInst,
+                                  std::vector<Instruction *> &allInstrs) {
   std::map<Instruction *, Instruction *> replicatedInstrs;
   for (auto currIn : allInstrs) {
     Instruction *newInstr = currIn->clone();
     if (ICmpInst *currICMPInstr = dyn_cast<ICmpInst>(currIn)) {
       CmpInst::Predicate currInstrP = currICMPInstr->getPredicate();
       if (currInstrP == CmpInst::ICMP_EQ || currInstrP == CmpInst::ICMP_NE) {
-        assert (currICMPInstr->getNumOperands() == 2 && "Expect == and != to have 2 operands.");
+        assert(currICMPInstr->getNumOperands() == 2 &&
+               "Expect == and != to have 2 operands.");
         // first get the operands.
         Value *op1 = currICMPInstr->getOperand(0);
         Value *op2 = currICMPInstr->getOperand(1);
 
-        // see if these are already replicated? if yes, get the replicated copies.
+        // see if these are already replicated? if yes, get the replicated
+        // copies.
         if (Instruction *opInstr = dyn_cast<Instruction>(op1)) {
           if (replicatedInstrs.find(opInstr) != replicatedInstrs.end()) {
             op1 = replicatedInstrs[opInstr];
@@ -153,10 +155,12 @@ static bool duplicateInstructions(IRBuilder<> &builder, BranchInst &targetBrInst
         }
 
         // Now, negate them.
-        Value *xorOp1 = builder.CreateBinOp(Instruction::BinaryOps::Xor, op1,
-                                            ConstantInt::get(op1->getType(), ~0));
-        Value *xorOp2 = builder.CreateBinOp(Instruction::BinaryOps::Xor, op2,
-                                            ConstantInt::get(op2->getType(), ~0));
+        Value *xorOp1 =
+            builder.CreateBinOp(Instruction::BinaryOps::Xor, op1,
+                                ConstantInt::get(op1->getType(), ~0));
+        Value *xorOp2 =
+            builder.CreateBinOp(Instruction::BinaryOps::Xor, op2,
+                                ConstantInt::get(op2->getType(), ~0));
 
         // replace the operands with Xored operands.
         newInstr->replaceUsesOfWith(currICMPInstr->getOperand(0), xorOp1);
@@ -179,7 +183,8 @@ static bool duplicateInstructions(IRBuilder<> &builder, BranchInst &targetBrInst
       builder.Insert(newInstr);
     }
 
-    assert(newInstr != nullptr && "New instruction to insert cannot be nullptr");
+    assert(newInstr != nullptr &&
+           "New instruction to insert cannot be nullptr");
     replicatedInstrs[currIn] = newInstr;
     for (unsigned i = 0; i < newInstr->getNumOperands(); i++) {
       Value *currOp = newInstr->getOperand(i);
@@ -209,7 +214,9 @@ static bool duplicateInstructions(IRBuilder<> &builder, BranchInst &targetBrInst
  * @param gdFunction Pointer to glitch detected function.
  * @return true if insertion is succesful else false
  */
-bool insertBranch2(BranchInst &targetInstr, unsigned successorNum, Function *gdFunction) {
+bool insertBranch2(BranchInst &targetInstr, unsigned successorNum,
+                   Function *gdFunction,
+                   std::set<Instruction *> &insertedBranches) {
   bool retVal = true;
 
   try {
@@ -218,7 +225,8 @@ bool insertBranch2(BranchInst &targetInstr, unsigned successorNum, Function *gdF
       return false;
     }
 
-    assert((successorNum == 0 || successorNum == 1) && "Successor number cannot be other than 0 or 1");
+    assert((successorNum == 0 || successorNum == 1) &&
+           "Successor number cannot be other than 0 or 1");
 
     // if (Verbose)
     // {
@@ -228,17 +236,17 @@ bool insertBranch2(BranchInst &targetInstr, unsigned successorNum, Function *gdF
 
     // Create a new basic block for our redundant check
     BasicBlock *doubleCheck =
-      BasicBlock::Create(targetInstr.getContext(), "doubleCheck");
+        BasicBlock::Create(targetInstr.getContext(), "doubleCheck");
     // create a failure block
     BasicBlock *failBlock =
-      BasicBlock::Create(targetInstr.getContext(), "failBlock");
+        BasicBlock::Create(targetInstr.getContext(), "failBlock");
 
     // Get the basicblock of the true branch
     auto trueBB = targetInstr.getSuccessor(successorNum);
     // we create a fall through BB so that we can update all the BBs
     // that refer to targetBB with fallThroughBB
     BasicBlock *fallthroughBB =
-      BasicBlock::Create(targetInstr.getContext(), "fallThrough");
+        BasicBlock::Create(targetInstr.getContext(), "fallThrough");
     IRBuilder<> builder(fallthroughBB);
     // connect fallthrough to the true BB
     builder.CreateBr(trueBB);
@@ -259,12 +267,14 @@ bool insertBranch2(BranchInst &targetInstr, unsigned successorNum, Function *gdF
 
     Instruction *branchNew = nullptr;
     if (successorNum == 0) {
-      branchNew = builder.CreateCondBr(targetInstr.getCondition(), fallthroughBB, failBlock);
+      branchNew = builder.CreateCondBr(targetInstr.getCondition(),
+                                       fallthroughBB, failBlock);
     } else {
-      branchNew = builder.CreateCondBr(targetInstr.getCondition(), failBlock, fallthroughBB);
+      branchNew = builder.CreateCondBr(targetInstr.getCondition(), failBlock,
+                                       fallthroughBB);
     }
 
-    assert (branchNew != nullptr && "Branch instruction cannot be nullptr");
+    assert(branchNew != nullptr && "Branch instruction cannot be nullptr");
 
     // replicate the comparision activity
     std::vector<Instruction *> instrsToReplicate;
@@ -273,6 +283,8 @@ bool insertBranch2(BranchInst &targetInstr, unsigned successorNum, Function *gdF
     builder.SetInsertPoint(branchNew);
     duplicateInstructions(builder, *(dyn_cast<BranchInst>(branchNew)),
                           instrsToReplicate);
+
+    insertedBranches.insert(dyn_cast<BranchInst>(branchNew));
 
     // Make our failure case call the glitch detected function
     builder.SetInsertPoint(failBlock);

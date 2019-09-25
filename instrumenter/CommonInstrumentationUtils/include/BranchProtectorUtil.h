@@ -30,6 +30,8 @@ void setVerbose(bool v);
 
 void setTag(std::string tagN);
 
-bool insertBranch2(BranchInst &targetInstr, unsigned successorNum, Function *gdFunction);
+bool insertBranch2(BranchInst &targetInstr, unsigned successorNum,
+                   Function *gdFunction,
+                   std::set<Instruction *> &insertedBranches);
 
 #endif //_BRANCHPROTECTORUTIL_H

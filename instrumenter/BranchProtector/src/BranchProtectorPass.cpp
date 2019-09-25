@@ -7,6 +7,7 @@
 // http://releases.llvm.org/2.6/docs/tutorial/JITTutorial2.html
 //
 
+#include "BranchProtectorUtil.h"
 #include <iostream>
 #include <llvm/Analysis/CFGPrinter.h>
 #include <llvm/Analysis/CallGraph.h>
@@ -25,7 +26,6 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include "BranchProtectorUtil.h"
 #include <set>
 
 using namespace llvm;
@@ -51,8 +51,8 @@ public:
   std::set<Function *> annotFuncs;
   std::string AnnotationString = "NoResistor";
   std::set<Instruction *> insertedBranches;
-  std::string TAG = "\033[1;31m[GR/Branch]\033[0m ";
-  bool Verbose = false;
+  std::string TAG = "\033[1;31m[GR/ReLoop]\033[0m ";
+  bool Verbose = true;
   BranchProtectorPass() : FunctionPass(ID) { this->grFunction = nullptr; }
 
   Function *getGRFunction(Module &m) {
@@ -163,7 +163,8 @@ public:
     if (isFunctionSafeToModify(&F)) {
       // errs() << TAG << F << "\n";
       for (auto &bb : F) {
-        // dbgs() << TAG << bb << "\n";
+        if (Verbose)
+          dbgs() << TAG << bb << "\n";
         for (auto &ins : bb) {
           // errs() << TAG << ins << "\n";
           if (isa<BranchInst>(ins)) {
@@ -174,8 +175,9 @@ public:
               // }
               continue;
             }
-            insertBranch2(cast<BranchInst>(ins), 0, this->getGRFunction(*(F.getParent())));
-            insertedBranches.insert(dyn_cast<BranchInst>(&ins));
+            insertBranch2(cast<BranchInst>(ins), 0,
+                          this->getGRFunction(*(F.getParent())),
+                          insertedBranches);
           }
         }
         // insertDelay(&bb.back(), false);

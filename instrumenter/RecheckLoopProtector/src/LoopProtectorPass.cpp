@@ -40,8 +40,10 @@ public:
   static char ID;
   Function *grFunction;
   std::set<Function *> annotFuncs;
+    std::set<Instruction *> insertedBranches;
+
   std::string AnnotationString = "NoResistor";
-  std::string TAG = "\033[1;31m[GR/Loop]\033[0m ";
+  std::string TAG = "\033[1;31m[GR/ReLoop]\033[0m ";
   bool Verbose = false;
   LoopProtectorPass() : FunctionPass(ID) { this->grFunction = nullptr; }
 
@@ -161,7 +163,8 @@ public:
               if (BI->getSuccessor(successorNum) != outBB) {
                 successorNum = 1;
               }
-              insertBranch2(*BI, successorNum, getGRFunction(*(F.getParent())));
+              insertBranch2(*BI, successorNum, getGRFunction(*(F.getParent())),
+              insertedBranches);
             }
           }
         }
