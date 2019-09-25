@@ -94,6 +94,12 @@ public:
 
   bool isConstantRet(ReturnInst *ri){
     Value *ret = ri->getReturnValue();
+    if(!ret) {
+      errs() << "[GP RetPro Warning] no ret value??\n";
+      ri->dump();
+      errs() << "-----------------\n";
+      return false;
+    }
     if(ConstantInt *ci = dyn_cast<ConstantInt>(ret))
       return ci == one || ci == zero;
     else if (LoadInst *li = dyn_cast<LoadInst>(ret)){
