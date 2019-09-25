@@ -39,7 +39,12 @@ public:
   std::set<Function *> annotFuncs;
   std::string AnnotationString = "NoResistor";
   std::string TAG = "\033[1;31m[GR/Ret]\033[0m ";
-  bool Verbose = false;
+  bool Verbose = true;
+    
+  ConstantInt *zero;
+  ConstantInt *one;
+  Module *M1;
+
   RetProtectorPass() : ModulePass(ID) { this->delayFunction = nullptr; }
 
   ~RetProtectorPass() {}
@@ -87,45 +92,64 @@ public:
     }
   }
 
-  void findReturns(ConstantInt *ci, vector<ReturnInst *> *rets){
-    for (User *U : ci->users()) {
-      Instruction *inst = dyn_cast<Instruction>(U);
-      if (!inst || !shouldInstrumentFunc(*(inst->getFunction())))
-        continue;
-      else if (ReturnInst *ri = dyn_cast<ReturnInst>(inst)) {
-        // check if address taken
-        // ri->dump();
-        // const User *zed;
-        // errs() << "Address Taken: " <<
-        // ri->getFunction()->hasAddressTaken(&zed) << "\n"; const
-        // BitCastOperator *tmp = dyn_cast<BitCastOperator>(zed); if(tmp) {
-        //  tmp->dump();
-        //  for(const User *U2 : tmp->users())
-        //    U2->dump();
-        //}
-        // if(!ri->getFunction()->hasAddressTaken())
-        if (Verbose)
-          errs() << TAG << "Found " << *ri << "\n";
-        rets->push_back(ri);
+  bool isConstantRet(ReturnInst *ri){
+    Value *ret = ri->getReturnValue();
+    if(ConstantInt *ci = dyn_cast<ConstantInt>(ret))
+      return ci == one || ci == zero;
+    else if (LoadInst *li = dyn_cast<LoadInst>(ret)){
+      Value *dest = li->getPointerOperand();
+      
+      bool onlyConstant = true;
+      for(User *U : dest->users()){
+        if(U == dest) continue;
+        else if(U == li) continue;
+        else if(StoreInst *si = dyn_cast<StoreInst>(U)){
+          Value *storedVal = si->getValueOperand();
+          onlyConstant |= storedVal == one || storedVal == zero;
+        }
+        else {
+          onlyConstant = false;
+        }
+      }
+      return onlyConstant;
+    }
+    return false;
+  }
+
+  void findReturns(vector<ReturnInst *> *rets){
+    for (auto it = M1->begin(); it != M1->end(); it++){
+      Function &F = *it;
+      for(BasicBlock &BB : F){
+        for(Instruction &I : BB) {
+          if(ReturnInst *ri = dyn_cast<ReturnInst>(&I)){
+            if(isConstantRet(ri)){ 
+              ri->dump();
+              errs() << ri->getFunction()->getName() << "\n------------------\n";
+              rets->push_back(ri);
+            }
+          }
+        }
       }
     }
   }
 
   bool runOnModule(Module &M) override {
+    // TODO: other bit sizes as well, but 32 seems to be the most common
+    zero = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
+    one = ConstantInt::get(Type::getInt32Ty(M.getContext()), 1);
+    M1 = &M;
+
     // Place a call to our detection function after the return of every function
     bool edited = false;
 
-    // TODO: other bit sizes as well, but 32 seems to be the most common
-    ConstantInt *zero = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
-    ConstantInt *one = ConstantInt::get(Type::getInt32Ty(M.getContext()), 1);
+    //M.dump();
 
     // TODO: Will likely need to handle invokes as well
     vector<ReturnInst *> *rets = new vector<ReturnInst *>();
     vector<CallInst *> calls;
 
     // Find all returns of a constant 0, 1
-    findReturns(zero, rets);
-    findReturns(one, rets);
+    findReturns(rets);
 
     // Find All call instructions in the Module
     for (auto it = M.begin(); it != M.end(); it++) {
@@ -192,10 +216,22 @@ public:
             ConstantInt::get(Type::getInt32Ty(M.getContext()), 0xaaaaaaaa);
         for (User *U : to_mod) {
           if (ReturnInst *ri = dyn_cast<ReturnInst>(U)) {
-            if(ri->getOperand(0) == zero)
+            if(ri->getReturnValue() == zero)
               ri->setOperand(0, gr_zero);
-            else if(ri->getOperand(0) == one)
+            else if(ri->getReturnValue() == one)
               ri->setOperand(0, gr_one);
+            else if(LoadInst *li = dyn_cast<LoadInst>(ri->getReturnValue())){
+              //If we got here, we can just re-find the store instructions and
+              //tweak them
+              for(User *U : li->getPointerOperand()->users()){
+                if(StoreInst *si = dyn_cast<StoreInst>(U)){
+                  if(si->getValueOperand() == one)
+                    si->setOperand(0, gr_one);
+                  else
+                    si->setOperand(0, gr_zero);
+                }
+              }     
+            }
             else
               assert(0 && "[GR RetPro Error] Modifying a ReturnInst that doesn't return 0 or 1");
             edited = true;

@@ -1,0 +1,117 @@
+#!/usr/bin/env python
+import argparse
+
+import logging
+import os
+import pickle
+import pprint
+import sys
+
+from glitchresistor.emulator import Architecture, glitch_code, BitFlip, run_code
+from glitchresistor.glitchresistor import parse_config_from_file
+
+
+def list_tuple(s):
+    try:
+        x, y, z = map(int, s.split(','))
+        return x, y, z
+    except:
+        raise argparse.ArgumentTypeError("Coordinates must be x,y,z")
+
+
+if __name__ == '__main__':
+    # Get user input
+    parser = argparse.ArgumentParser()
+    parser.add_argument("source_code", help="Assembly source file.")
+    parser.add_argument('--data_offset', "-o", default=0, type=int,
+                        help="Number of bytes of data defined at the beginning of the source.")
+    parser.add_argument('--count', '-c', default=50, type=int,
+                        help="Number of instructions to execute (default: 50)")
+    parser.add_argument('--debug', '-d', default=False, action='store_true')
+    parser.add_argument('--no_cache', default=True, action='store_false')
+    parser.add_argument('--architecture', '-A', default=Architecture.ARM_THUMB,
+                        help="Options: %s" % [(v.value, v.name) for v in Architecture])
+    parser.add_argument('--flip_type', '-F', default=BitFlip.AND, type=int,
+                        help="Options: %s" % [(v.value, v.name) for v in BitFlip])
+    parser.add_argument('--bytes', '-b', type=str, default=None,
+                        help="Which bytes, zero indexed, of the 'compiled' code to perturb (format: B1,B2,B3,...)")
+    parser.add_argument('--output', '-O', default="./results",
+                        help="Directory to store results in.")
+    parser.add_argument('--pool_instances', '-p', default=None, type=int,
+                        help="Number processes to create in pool. (Default: # of cores)")
+    parser.add_argument('--force_invalid', default=False, action='store_true',
+                        help="Force both 0xFFFFFFFF and 0x0000000 to be " \
+                             "invalid instructions.")
+    args = parser.parse_args()
+
+    # Do all of our checks!
+    if not os.path.exists(args.source_code):
+        print("Source file (%s) does not exist." % args.sample)
+        sys.exit()
+    if not os.path.exists(args.output):
+        try:
+            os.makedirs(args.output)
+        except:
+            print("Could not create output directory (%s)" % args.output)
+            sys.exit()
+
+    data_offset = args.data_offset
+    instruction_count = args.count
+    # the program
+    f = open(args.source_code, "r")
+    code = f.read()
+    f.close()
+
+    # Setup Logging
+    logging.basicConfig()
+    l = logging.getLogger()
+    if args.debug:
+        l.setLevel(logging.DEBUG)
+    else:
+        l.setLevel(logging.INFO)
+
+    f = open(args.source_code, "r")
+    test_code = f.read()
+    f.close()
+
+    config_dict = parse_config_from_file(test_code)
+
+    if args.bytes is not None:
+        config_bytes = args.bytes
+        print("* Using bytes to corrupt from command line...")
+    elif "bytes_to_trash" in config_dict:
+        print("* Using bytes to corrupt from file (%s)" % args.source_code)
+        config_bytes = config_dict['bytes_to_trash']
+    else:
+        print("* No bytes were specified to glitch (try gr-emulate?)")
+        sys.exit()
+
+    if "arch" in config_dict:
+        print("* Architecture defined in file! (%s)" % config_dict['arch'])
+        args.architecture = Architecture(config_dict['arch'])
+
+    bytes_to_trash = [int(x) for x in config_bytes.split(",")]
+
+    print("Code:\n%s" % test_code)
+    print("Bytes to flip: %s" % bytes_to_trash)
+    print("Architecture: %s" % args.architecture)
+
+    results = {}
+    # for ft in BitFlip:
+    flip_type = BitFlip(args.flip_type)
+    flip_type_str = flip_type.name
+    flip_operation = flip_type
+    results.update(
+        glitch_code(test_code, args.architecture, bytes_to_trash, flip_type,
+                    args.pool_instances, args.no_cache,
+                    force_invalid=args.force_invalid))
+
+    results['input'].update({'code': test_code,
+                             'bytes_to_trash': bytes_to_trash,
+                             'name': args.source_code})
+
+    pprint.pprint(results)
+    f = open(os.path.join(args.output, "%s_%s.pickle" % (results['input']['name'],
+                                                         flip_type_str)), "wb+")
+    pickle.dump(results, f)
+    f.close()
