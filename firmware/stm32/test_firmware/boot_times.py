@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # configure the serial connections (the parameters differs on the device you are connecting to)
 ser = serial.Serial(
-    port='/dev/tty.usbmodem144203',
+    port='/dev/ttyACM0',
     baudrate=38400,
     parity=serial.PARITY_ODD,
     stopbits=serial.STOPBITS_TWO,
@@ -64,6 +64,7 @@ flash_times = {}
 for f in only_bins:
     filename = os.path.join(output_path, f)
     program_board(filename)
+    reset_board()
     boot_times[f] = []
     flash_times[f] = []
     for x in range(10):

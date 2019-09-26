@@ -29,7 +29,7 @@ cp build/test_firmware.elf output/branch.elf
 cp build/test_firmware.bin output/branch.bin
 
 export CLANG_FLAGS=""
-export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/LoopProtector/libLoopProtector.so"
+export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/IntegrityProtector/libIntegrityProtector.so"
 make clean
 make > output/loop.txt 2>&1
 cp build/test_firmware.elf output/loop.elf
@@ -50,10 +50,10 @@ cp build/test_firmware.elf output/ret.elf
 cp build/test_firmware.bin output/ret.bin
 
 export CLANG_FLAGS=""
+export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/IntegrityProtector/libIntegrityProtector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/DelayInjector/libDelayInjector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/BranchProtector/libBranchProtector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/LoopProtector/libLoopProtector.so"
-export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/IntegrityProtector/libIntegrityProtector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/RetProtector/libRetProtector.so"
 export GR_ENUM_FLAGS="-extra-arg-before=-w --allinit -output-postfix bak"
 make clean

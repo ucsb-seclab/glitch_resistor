@@ -2,6 +2,7 @@
 // Created by machiry at the beginning of time.
 //
 
+#include "BranchProtectorUtil.h"
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
@@ -16,7 +17,6 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include "BranchProtectorUtil.h"
 #include <set>
 
 using namespace llvm;
@@ -40,7 +40,7 @@ public:
   static char ID;
   Function *grFunction;
   std::set<Function *> annotFuncs;
-    std::set<Instruction *> insertedBranches;
+  std::set<Instruction *> insertedBranches;
 
   std::string AnnotationString = "NoResistor";
   std::string TAG = "\033[1;31m[GR/ReLoop]\033[0m ";
@@ -128,8 +128,9 @@ public:
     AU.addRequired<LoopInfoWrapperPass>();
   }
 
-
   bool runOnFunction(Function &F) override {
+    setTag(TAG);
+    setVerbose(Verbose);
     // Should we instrument this function?
     if (shouldInstrumentFunc(F) == false) {
       return false;
@@ -164,7 +165,7 @@ public:
                 successorNum = 1;
               }
               insertBranch2(*BI, successorNum, getGRFunction(*(F.getParent())),
-              insertedBranches);
+                            insertedBranches);
             }
           }
         }

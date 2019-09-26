@@ -20,5 +20,5 @@ python loop_glitch.py single_optimal -o glitch_single_optimal.pickle
 
 
 # Real Defenses
-python loop_glitch.py optimal_real -o real_optimal.pickle
+python loop_glitch.py precise_real -o real_optimal.pickle
 python loop_glitch.py long_real -o real_long.pickle

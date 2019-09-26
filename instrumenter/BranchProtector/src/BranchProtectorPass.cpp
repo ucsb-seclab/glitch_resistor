@@ -150,6 +150,8 @@ public:
   }
 
   bool runOnFunction(Function &F) override {
+    setTag(TAG);
+    setVerbose(Verbose);
     // Should we instrument this function?
     if (shouldInstrumentFunc(F) == false) {
       return false;

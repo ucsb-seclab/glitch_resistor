@@ -9,6 +9,7 @@ from os.path import isfile, join
 from mpl_toolkits import mplot3d
 import numpy as np
 import matplotlib.pyplot as plt
+import mpl_toolkits.mplot3d.art3d as a3d
 
 path = sys.argv[1]
 onlyfiles = [f for f in listdir(path) if isfile(join(sys.argv[1], f))]
@@ -33,15 +34,28 @@ for f in onlyfiles:
     if len(results) == 0:
         continue
 
+    # Patch up icorrect logging
+    if results['parameters']['widths'][-1] == 48:
+        results['parameters']['widths'] = np.append(results['parameters'][
+                                                        'widths'], 49)
+    if results['parameters']['offsets'][-1] == 48:
+        results['parameters']['offsets'] = np.append(results['parameters'][
+                                                         'offsets'], 49)
     print(f)
-    pprint.pprint(results['parameters'])
+    # pprint.pprint(results['parameters'])
     total_samples = len(results['parameters']['ext_offsets'])
     total_samples *= len(results['parameters']['widths'])
     total_samples *= len(results['parameters']['offsets'])
-    total_samples *= results['parameters']['repeat']
+    # total_samples *= results['parameters']['repeat']
 
-    print(total_samples)
-    print((results['failures'] - total_samples) / total_samples)
+    # print(total_samples)
+    partials = 0
+    if 'partial_successes' in results:
+        print("partial", results['partial_successes'])
+        partials = results['partial_successes']
+    print("Success rate:", (total_samples - results['failures'] - partials) /
+          total_samples)
+    print("Time:", results['parameters']['time_elapsed'])
     print(len(results['successes']), results['failures'])
 
     values = {}
@@ -82,12 +96,29 @@ for f in onlyfiles:
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
+
+    for idx in range(len(xs)):
+        l = a3d.Line3D((xs[idx], xs[idx]), (ys[idx], ys[idx]), (min(zs) - 1,
+                                                                zs[idx]),
+                       color='gray', ls='--', linewidth=.5)
+        l.set_alpha(0.5)
+        ax.add_line(l)
+
     ax.scatter(xs, ys, zs)
     ax.set_xticks(xs)
     ax.set_xlabel('Target Offset', fontsize=20)
+    ax.set_xlim([min(xs), max(xs)])
+    ax.set_ylim([min(ys), max(ys)])
+    ax.set_zlim([min(zs), max(zs)])
     ax.set_ylabel('Width', fontsize=20)
     ax.set_zlabel('Offset', fontsize=20)
-    plt.show()
 
-    print(f)
+
+    # plt.show()
+    filename = os.path.join(path, '%s.pdf' % os.path.splitext(f)[0])
+    plt.savefig(filename)
+
+    # print(f)
     pprint.pprint(values)
+
+    print ("--\n")

@@ -21,6 +21,7 @@
 using namespace llvm;
 
 #define GR_FUNC_NAME "gr_glitch_detected"
+std::string TAG = "\033[1;31m[GR/Loop]\033[0m ";
 
 namespace GLitchPlease {
 
@@ -40,7 +41,6 @@ public:
   Function *grFunction;
   std::set<Function *> annotFuncs;
   std::string AnnotationString = "NoResistor";
-  std::string TAG = "\033[1;31m[GR/Loop]\033[0m ";
   bool Verbose = false;
   LoopProtectorPass() : FunctionPass(ID) { this->grFunction = nullptr; }
 

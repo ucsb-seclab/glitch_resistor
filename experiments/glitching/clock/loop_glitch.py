@@ -151,7 +151,8 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                     params = [scope.glitch.ext_offset, scope.glitch.width,
                               scope.glitch.offset,
                               successes, partial_successes, sample_size,
-                              success_result]
+                              success_result,
+                              repeat]
 
                     if detected:
                         detected_glitch_results.append(params)
@@ -239,7 +240,8 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                 params = [scope.glitch.ext_offset, scope.glitch.width,
                           scope.glitch.offset,
                           successes, partials, sample_size,
-                          success_result]
+                          success_result,
+                          repeat]
 
                 if detected:
                     detected_glitch_results.append(params)
@@ -426,14 +428,14 @@ if __name__ == "__main__":
         offsets = numpy.arange(-49, 50, 1)
         repeats = range(30, 10, -2)
 
-    if args.experiment == "optimal_real":
+    if args.experiment == "precise_real":
 
         function_name = None
-        sample_size = 10
-        ext_offsets = range(0, 100, 10)
+        sample_size = 1
+        ext_offsets = range(0, 110, 10)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        stop_at_optimal = True
+        stop_at_optimal = False
         multi_glitch = False
         repeat = 10
         max_depth = 6
@@ -447,7 +449,7 @@ if __name__ == "__main__":
         ext_offsets = [0]
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        repeats = range(50, 10, -5)
+        repeats = range(100, 0, -10)
 
         fw_dir = "cw_protected"
         fw_path = os.path.join(fw_dir, "build/cw_glitching.hex")

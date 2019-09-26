@@ -6,8 +6,6 @@
 
 static bool Verbose = false;
 static std::string TAG = "\033[1;31m[GR/BranchUtil]\033[0m ";
-
-static bool canReplicate(Instruction *currIn);
 static bool canReplicateOperands(Instruction *currIn);
 static bool
 recursivelyGetInstructionsToReplicate(Instruction *currInstr,
