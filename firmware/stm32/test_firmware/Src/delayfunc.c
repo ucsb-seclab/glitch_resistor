@@ -1,6 +1,7 @@
 #include "main.h"
 #include "stm32_hal_legacy.h"
 #include <stdlib.h>
+#include <stdio.h>
 
 // void gpdelay(void) {
 //    // make sure that you initialize
@@ -24,8 +25,8 @@ int delay_first = 1;
 int delay_writing = 0;
 const unsigned int seed_address = 0x0800e400;
 
-extern flash_start;
-extern flash_end;
+extern uint32_t flash_start;
+extern uint32_t flash_end;
 /***
  * Reference:
 https://community.st.com/s/question/0D50X00009XkfIOSAZ/stm32f0-help-with-flash-to-read-and-write-hal-libraries

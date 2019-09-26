@@ -1,5 +1,7 @@
 #include "main.h"
 #include <stdio.h>
+#include <string.h>
+
 UART_HandleTypeDef huart2;
 void gr_glitch_detected() {
   huart2.Instance = USART2;

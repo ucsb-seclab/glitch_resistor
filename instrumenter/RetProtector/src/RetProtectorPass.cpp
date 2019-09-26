@@ -39,7 +39,7 @@ public:
   std::set<Function *> annotFuncs;
   std::string AnnotationString = "NoResistor";
   std::string TAG = "\033[1;31m[GR/Ret]\033[0m ";
-  bool Verbose = true;
+  bool Verbose = false;
     
   ConstantInt *zero;
   ConstantInt *one;

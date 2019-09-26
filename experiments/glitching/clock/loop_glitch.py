@@ -20,18 +20,22 @@ fw_dir = "cw_glitching"
 fw_path = os.path.join(fw_dir, "build/cw_glitching.hex")
 
 
-def build_firmware(directory, function="LOOP"):
+def build_firmware(directory, function="LOOP", use_glitch_resistor=False):
     """
     Change the directory and run the appropriate make command
-    :param directory:
-    :param function:
+    :param use_glitch_resistor: Build using make or ./build.sh
+    :param directory: The directory of the firmware
+    :param function: Do we want to pass a build parameter?
     :return:
     """
     from subprocess import call
     cwd = os.getcwd()
     os.chdir(directory)
     call(["make", "clean"])
-    rtn = call(["make", "FUNC_SEL=%s" % function])
+    if use_glitch_resistor:
+        rtn = call(["./build.sh"])
+    else:
+        rtn = call(["make", "FUNC_SEL=%s" % function])
     os.chdir(cwd)
 
     return rtn == 0
@@ -93,6 +97,7 @@ def run_firmware(arm=True, multi_glitch=False):
 
     # Read UART
     rtn += target.read(timeout=.01)
+
     return rtn
 
 
@@ -105,6 +110,7 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
     :param repeats:
     :return:
     """
+    global failed_glitches, detected_glitches
     for repeat in repeats:
         for ext_offset in ext_offsets:
             for width in widths:
@@ -120,7 +126,7 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                     successes = 0
                     partials = 0
                     success_result = ""
-
+                    detected = False
                     for i in range(sample_size):
 
                         # Run firmware
@@ -131,6 +137,12 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                             logger.info("Got a success!")
                             success_result = response
                             successes += 1
+                        # Was it detected?
+                        elif "Glitch" in repr(response):
+                            print ("GR Detected!!", repr(response))
+                            detected = True
+                            detected_glitches += 1
+
                         else:
                             failed_glitches += 1
 
@@ -141,6 +153,8 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                               successes, partial_successes, sample_size,
                               success_result]
 
+                    if detected:
+                        detected_glitch_results.append(params)
                     # Did we have any successes?
                     if successes > 0 or partials > 0:
                         print("* Ext. Offset: %d Width: %f Offset: %f Repeat: "
@@ -158,7 +172,19 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
 def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                     multi_glitch=False, stop_at_optimal=False,
                     max_depth=6):
-    global partial_successes, failed_glitches
+    """
+
+    :param ext_offsets:
+    :param widths:
+    :param offsets:
+    :param depth:
+    :param repeat:
+    :param multi_glitch:
+    :param stop_at_optimal:
+    :param max_depth:
+    :return:
+    """
+    global partial_successes, failed_glitches, detected_glitches
     if depth > max_depth:
         return False
 
@@ -181,24 +207,30 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                 partials = 0
                 success_result = ""
                 partial_success = False
-
+                detected = False
                 for i in range(sample_size):
 
                     # Run firmware
                     response = run_firmware(multi_glitch=multi_glitch)
 
+                    # Check for glitch success
+                    if SUCCESS_OUTPUT in repr(response):
+                        logger.info("Got a success!")
+                        success_result = response
+                        successes += 1
+
                     # Did we get a partial success?
-                    if "Yes1" in repr(response) and multi_glitch:
+                    elif "Yes1" in repr(response) and multi_glitch:
                         partials += 1
                         partial_successes += 1
                         if success_result == "":
                             success_result = response
 
-                    # Check for glitch success
-                    elif SUCCESS_OUTPUT in repr(response):
-                        logger.info("Got a success!")
-                        success_result = response
-                        successes += 1
+                    # Was it detected?
+                    elif "Glitch" in repr(response):
+                        print ("GR Detected!!", repr(response))
+                        detected = True
+                        detected_glitches += 1
 
                     else:
                         failed_glitches += 1
@@ -206,14 +238,15 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                 # Save our successful glitches
                 params = [scope.glitch.ext_offset, scope.glitch.width,
                           scope.glitch.offset,
-                          successes, partial_successes, sample_size,
+                          successes, partials, sample_size,
                           success_result]
+
+                if detected:
+                    detected_glitch_results.append(params)
 
                 # Are we searching for the most optimal solution?
                 if successes == sample_size and stop_at_optimal:
                     return params
-
-
 
                 # Did we have any successes?
                 if successes > 0 or partials > 0:
@@ -293,6 +326,8 @@ if __name__ == "__main__":
     scope.io.hs2 = "glitch"
 
     successful_glitches = []
+    detected_glitch_results = []
+    detected_glitches = 0
     partial_successes = 0
     failed_glitches = 0
 
@@ -301,6 +336,7 @@ if __name__ == "__main__":
     max_depth = 6
     stop_at_optimal = False
     repeats = []
+    gr_build = False
 
     # Find optimal glitch parameters
     if args.experiment == "single_optimal":
@@ -308,8 +344,8 @@ if __name__ == "__main__":
         function_name = "SINGLE"
         sample_size = 10
         ext_offsets = range(0, 10)
-        widths = numpy.arange(-49, 49, 1)
-        offsets = numpy.arange(-49, 49, 1)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
         stop_at_optimal = True
         multi_glitch = False
         repeat = 10
@@ -320,8 +356,8 @@ if __name__ == "__main__":
         function_name = "SINGLE"
         sample_size = 1
         ext_offsets = range(0, 10)
-        widths = numpy.arange(-49, 49, 1)
-        offsets = numpy.arange(-49, 49, 1)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
         stop_at_optimal = False
         multi_glitch = False
         repeat = 1
@@ -331,8 +367,8 @@ if __name__ == "__main__":
         function_name = "SINGLEONE"
         sample_size = 1
         ext_offsets = range(0, 10)
-        widths = numpy.arange(-49, 49, 1)
-        offsets = numpy.arange(-49, 49, 1)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
         stop_at_optimal = False
         multi_glitch = False
         repeat = 1
@@ -342,8 +378,8 @@ if __name__ == "__main__":
         function_name = "NOZERO"
         sample_size = 1
         ext_offsets = range(0, 10)
-        widths = numpy.arange(-49, 49, 1)
-        offsets = numpy.arange(-49, 49, 1)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
         stop_at_optimal = False
         multi_glitch = False
         repeat = 1
@@ -353,8 +389,8 @@ if __name__ == "__main__":
         function_name = "NOZERO"
         sample_size = 10
         ext_offsets = [0]
-        widths = numpy.arange(-49, 49, 1)
-        offsets = numpy.arange(-49, 49, 1)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
         stop_at_optimal = True
         multi_glitch = False
         max_depth = 6
@@ -366,8 +402,19 @@ if __name__ == "__main__":
         function_name = "DOUBLE"
         sample_size = 1
         ext_offsets = range(0, 10)
-        widths = numpy.arange(-49, 49, 1)
-        offsets = numpy.arange(-49, 49, 1)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
+        multi_glitch = True
+        repeat = 1
+
+    # Multi-glitch
+    elif args.experiment == "multi_fixed":
+
+        function_name = "DOUBLEFIXED"
+        sample_size = 1
+        ext_offsets = range(0, 10)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
         multi_glitch = True
         repeat = 1
 
@@ -375,26 +422,54 @@ if __name__ == "__main__":
         function_name = "LONG"
         sample_size = 1
         ext_offsets = [0]
-        widths = numpy.arange(-49, 49, 1)
-        offsets = numpy.arange(-49, 49, 1)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
         repeats = range(30, 10, -2)
+
+    if args.experiment == "optimal_real":
+
+        function_name = None
+        sample_size = 10
+        ext_offsets = range(0, 100, 10)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
+        stop_at_optimal = True
+        multi_glitch = False
+        repeat = 10
+        max_depth = 6
+        fw_dir = "cw_protected"
+        fw_path = os.path.join(fw_dir, "build/cw_glitching.hex")
+        gr_build = True
+
+    elif args.experiment == "long_real":
+        function_name = None
+        sample_size = 1
+        ext_offsets = [0]
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
+        repeats = range(50, 10, -5)
+
+        fw_dir = "cw_protected"
+        fw_path = os.path.join(fw_dir, "build/cw_glitching.hex")
+        gr_build = True
 
     else:
         logger.error("Invalid experiment name (%s)!" % args.experiment)
         sys.exit(0)
 
     # Build and flash our firmware
-    if not build_firmware(fw_dir, function=function_name):
+    if not build_firmware(fw_dir, function=function_name,
+                          use_glitch_resistor=gr_build):
         logger.error("Could not build firmware")
     cw.program_target(scope, prog, fw_path)
 
     # Run the firmware once
     benign = run_firmware(arm=False, multi_glitch=False)
-    print("Benign result: ", benign)
+    print("Benign result: ", repr(benign))
 
     time_start = time.time()
     optimal_params = None
-    if args.experiment == "long":
+    if "long" in args.experiment:
         long_glitch(ext_offsets,  # range(37, 37 + 8, 1),
                     widths,
                     offsets,
@@ -426,10 +501,13 @@ if __name__ == "__main__":
             'repeat': repeat,
             'max_depth': max_depth,
             'repeats': repeats,
-            'time_elapsed': time.time()-time_start
+            'time_elapsed': time.time() - time_start
         },
         'optimal': optimal_params,
         'failures': failed_glitches,
-        'successes': successful_glitches}
+        'successes': successful_glitches,
+        'partial_successes': partial_successes,
+        'detected_glitches': detected_glitches,
+        'detections': detected_glitch_results}
     pprint.pprint(output)
     pickle.dump(output, open(args.output, "wb"))

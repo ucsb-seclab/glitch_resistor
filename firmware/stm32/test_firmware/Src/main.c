@@ -65,7 +65,8 @@ static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN 0 */
 
 int checkValue(int value) {
-  if (value == 0) {
+  value++;
+  if (value == 1) {
     return GR_SUCCESS;
   } else {
     return GR_FAILURE;

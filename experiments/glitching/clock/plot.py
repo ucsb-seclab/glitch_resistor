@@ -33,6 +33,15 @@ for f in onlyfiles:
     if len(results) == 0:
         continue
 
+    print(f)
+    pprint.pprint(results['parameters'])
+    total_samples = len(results['parameters']['ext_offsets'])
+    total_samples *= len(results['parameters']['widths'])
+    total_samples *= len(results['parameters']['offsets'])
+    total_samples *= results['parameters']['repeat']
+
+    print(total_samples)
+    print((results['failures'] - total_samples) / total_samples)
     print(len(results['successes']), results['failures'])
 
     values = {}
@@ -43,11 +52,12 @@ for f in onlyfiles:
         ext_offset, width, offset, successes, partial_successes, sample_size, \
         success_result = params
 
-        xs.append(ext_offset)
-        ys.append(width)
-        zs.append(offset)
-
         value_str = success_result.split("\n")
+
+        if SUCCESS in success_result:
+            xs.append(ext_offset)
+            ys.append(width)
+            zs.append(offset)
 
         value_partial = None
         value = None
