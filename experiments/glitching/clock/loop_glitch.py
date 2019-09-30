@@ -110,7 +110,7 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
     :param repeats:
     :return:
     """
-    global failed_glitches, detected_glitches
+    global failed_glitches, detected_glitchesm, successful_glitches_count
     for repeat in repeats:
         for ext_offset in ext_offsets:
             for width in widths:
@@ -137,6 +137,7 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                             logger.info("Got a success!")
                             success_result = response
                             successes += 1
+                            successful_glitches_count += 1
                         # Was it detected?
                         elif "Glitch" in repr(response):
                             print ("GR Detected!!", repr(response))
@@ -185,7 +186,8 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
     :param max_depth:
     :return:
     """
-    global partial_successes, failed_glitches, detected_glitches
+    global partial_successes, failed_glitches, detected_glitches, \
+        successful_glitches_count
     if depth > max_depth:
         return False
 
@@ -219,6 +221,7 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                         logger.info("Got a success!")
                         success_result = response
                         successes += 1
+                        successful_glitches_count += 1
 
                     # Did we get a partial success?
                     elif "Yes1" in repr(response) and multi_glitch:
@@ -332,6 +335,7 @@ if __name__ == "__main__":
     detected_glitches = 0
     partial_successes = 0
     failed_glitches = 0
+    successful_glitches_count = 0
 
     multi_glitch = False
     repeat = 10
@@ -426,9 +430,9 @@ if __name__ == "__main__":
         ext_offsets = [0]
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        repeats = range(30, 10, -2)
+        repeats = range(30, 8, -2)
 
-    if args.experiment == "precise_real":
+    elif args.experiment == "precise_real":
 
         function_name = None
         sample_size = 1
@@ -443,13 +447,27 @@ if __name__ == "__main__":
         fw_path = os.path.join(fw_dir, "build/cw_glitching.hex")
         gr_build = True
 
+    elif args.experiment == "single_real":
+
+        function_name = None
+        sample_size = 1
+        ext_offsets = range(0, 10)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
+        stop_at_optimal = False
+        multi_glitch = False
+        repeat = 1
+        fw_dir = "cw_protected"
+        fw_path = os.path.join(fw_dir, "build/cw_glitching.hex")
+        gr_build = True
+
     elif args.experiment == "long_real":
         function_name = None
         sample_size = 1
         ext_offsets = [0]
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        repeats = range(100, 0, -10)
+        repeats = range(100, -10, -10)
 
         fw_dir = "cw_protected"
         fw_path = os.path.join(fw_dir, "build/cw_glitching.hex")
@@ -478,8 +496,8 @@ if __name__ == "__main__":
                     repeats)
     else:
         optimal_params = optimize_glitch(ext_offsets,
-                                         numpy.arange(-49, 50, 1),
-                                         numpy.arange(-49, 50, 1),
+                                         widths,
+                                         offsets,
                                          repeat=repeat,
                                          multi_glitch=multi_glitch,
                                          stop_at_optimal=stop_at_optimal)
@@ -508,6 +526,7 @@ if __name__ == "__main__":
         'optimal': optimal_params,
         'failures': failed_glitches,
         'successes': successful_glitches,
+        'successful_glitches_count':successful_glitches_count,
         'partial_successes': partial_successes,
         'detected_glitches': detected_glitches,
         'detections': detected_glitch_results}

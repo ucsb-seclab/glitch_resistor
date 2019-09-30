@@ -56,20 +56,35 @@ for f in onlyfiles:
     print("Success rate:", (total_samples - results['failures'] - partials) /
           total_samples)
     print("Time:", results['parameters']['time_elapsed'])
-    print(len(results['successes']), results['failures'])
+    print(len(results['successes']), results['failures'], total_samples)
 
     values = {}
     xs = []
     ys = []
     zs = []
+
+    detection_xs = []
+    detection_ys = []
+    detection_zs = []
+
+    successes_total = 0
     for params in results['successes']:
-        ext_offset, width, offset, successes, partial_successes, sample_size, \
-        success_result = params
+        repeat = 0
+        if len(params) == 8:
+            ext_offset, width, offset, successes, partial_successes, sample_size, \
+            success_result, repeat = params
+        else:
+            ext_offset, width, offset, successes, partial_successes, sample_size, \
+            success_result = params
 
         value_str = success_result.split("\n")
 
         if SUCCESS in success_result:
-            xs.append(ext_offset)
+            successes_total += successes
+            if "long" in f:
+                xs.append(repeat)
+            else:
+                xs.append(ext_offset)
             ys.append(width)
             zs.append(offset)
 
@@ -97,28 +112,68 @@ for f in onlyfiles:
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
+    print("Success rate:", successes_total / total_samples)
+
+    if "detections" in results and len(results['detections']) > 0 :
+
+        print(
+            "Detection rate:", len(results['detections']) /
+            (len(results['detections']) + successes_total))
+        for params in results['detections']:
+            ext_offset, width, offset, successes, partial_successes, sample_size, \
+            success_result, repeat = params
+
+            if "long" in f:
+                detection_xs.append(repeat)
+            else:
+                detection_xs.append(ext_offset)
+            detection_ys.append(width)
+            detection_zs.append(offset)
+
     for idx in range(len(xs)):
-        l = a3d.Line3D((xs[idx], xs[idx]), (ys[idx], ys[idx]), (min(zs) - 1,
-                                                                zs[idx]),
+        l = a3d.Line3D((xs[idx], xs[idx]), (ys[idx], ys[idx]),
+                       (min(results['parameters']['offsets']) - 2, zs[idx]),
                        color='gray', ls='--', linewidth=.5)
+        l.set_alpha(0.5)
+        ax.add_line(l)
+    for idx in range(len(detection_xs)):
+        l = a3d.Line3D((detection_xs[idx], detection_xs[idx]),
+                       (detection_ys[idx], detection_ys[idx]),
+                       (min(results['parameters']['offsets']) - 2, detection_zs[
+                           idx]),
+                       color='red', ls='--', linewidth=.5)
         l.set_alpha(0.5)
         ax.add_line(l)
 
     ax.scatter(xs, ys, zs)
-    ax.set_xticks(xs)
-    ax.set_xlabel('Target Offset', fontsize=20)
-    ax.set_xlim([min(xs), max(xs)])
-    ax.set_ylim([min(ys), max(ys)])
-    ax.set_zlim([min(zs), max(zs)])
+    ax.scatter(detection_xs, detection_ys, detection_zs, marker='x',
+               color='red')
+
+    if "long" in f:
+        print(min(results['parameters']['repeats']))
+        ax.set_xticks(xs + detection_xs)
+        ax.set_xlabel('Repeat Count', fontsize=20)
+        ax.set_xlim([min(results['parameters']['repeats']),
+                     max(results['parameters']['repeats'])])
+    else:
+        ax.set_xticks(xs + detection_xs)
+        ax.set_xlabel('Target Offset', fontsize=20)
+        ax.set_xlim([min(results['parameters']['ext_offsets']),
+                     max(results['parameters']['ext_offsets'])])
+        # print(f)
+        pprint.pprint(values)
+    ax.set_ylim([min(results['parameters']['widths']),
+                 max(results['parameters']['widths'])])
+    ax.set_zlim([min(results['parameters']['offsets']),
+                 max(results['parameters']['offsets'])])
     ax.set_ylabel('Width', fontsize=20)
     ax.set_zlabel('Offset', fontsize=20)
-
 
     # plt.show()
     filename = os.path.join(path, '%s.pdf' % os.path.splitext(f)[0])
     plt.savefig(filename)
 
-    # print(f)
-    pprint.pprint(values)
+    pprint.pprint(results['parameters'])
+
 
     print ("--\n")
