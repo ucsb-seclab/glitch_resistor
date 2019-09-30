@@ -28,11 +28,11 @@ void setTag(std::string tagN) { TAG = tagN; }
 static bool canReplicate(Instruction *currIn) {
   // Let's not replicate volatile memory loads
   // These values SHOULD actually change between comparisions
-  if (LoadInst *LI = dyn_cast<LoadInst>(currIn)) {
+  /*if (LoadInst *LI = dyn_cast<LoadInst>(currIn)) {
     if (LI->isVolatile()) {
       return false;
     }
-  }
+  }*/
 
   // it should not be a call or a load or constant instruction.
   // PHINodes also pose issues since they can span multiple basic blocks
@@ -128,6 +128,14 @@ static bool getAllInstrToReplicate(BranchInst &targetInstr,
   return false;
 }
 
+Value *createNewLocalVariable(Function &F, Type *varType) {
+  IRBuilder<> builder(&(*(F.getEntryBlock().getFirstInsertionPt())));
+  AllocaInst *newAlloca = builder.CreateAlloca(
+      varType, nullptr, "volatileLoadVar");
+  newAlloca->setAlignment(4);
+  return newAlloca;
+}
+
 /***
  * Duplicate all the instructions at the provided insertion point.
  * @param builder point at which the instruction needs to be inserted.
@@ -142,8 +150,9 @@ static bool duplicateInstructions(IRBuilder<> &builder,
                                   std::vector<Instruction *> &allInstrs) {
   std::map<Instruction *, Instruction *> replicatedInstrs;
   for (auto currIn : allInstrs) {
-    Instruction *newInstr = currIn->clone();
+    Instruction *newInstr = nullptr;
     if (ICmpInst *currICMPInstr = dyn_cast<ICmpInst>(currIn)) {
+      newInstr = currIn->clone();
       CmpInst::Predicate currInstrP = currICMPInstr->getPredicate();
       if (currInstrP == CmpInst::ICMP_EQ || currInstrP == CmpInst::ICMP_NE) {
         assert(currICMPInstr->getNumOperands() == 2 &&
@@ -210,18 +219,36 @@ static bool duplicateInstructions(IRBuilder<> &builder,
       }
     }
     if (LoadInst *LI = dyn_cast<LoadInst>(currIn)) {
-      // if this is a load instruction? make it volatile
-      LI->setVolatile(true);
-      // also make the new instruction volatile.
-      (dyn_cast<LoadInst>(newInstr))->setVolatile(true);
       // now insert the newly created load right then and there
       // since, we marked it as volatile, it will not be optimized.
       auto instrIterator = LI->getIterator();
       instrIterator++;
       IRBuilder<> newBuilder(LI->getParent());
       newBuilder.SetInsertPoint(&(*instrIterator));
-      newBuilder.Insert(newInstr);
+
+      if (LI->isVolatile()) {
+        Value *newLocalVar = createNewLocalVariable(*(LI->getFunction()), LI->getType());
+        // make a volatile store.
+        newBuilder.CreateStore(LI, newLocalVar, true);
+        // make a volatile load
+        LoadInst *newlyInsertedLoad = newBuilder.CreateLoad(newLocalVar);
+        newlyInsertedLoad->setVolatile(true);
+        newBuilder.Insert(newlyInsertedLoad);
+        newInstr = newlyInsertedLoad;
+      } else {
+        // this is not a volatile LOAD.
+        newInstr = currIn->clone();
+        // if this is a load instruction? make it volatile
+        LI->setVolatile(true);
+        // also make the new instruction volatile.
+        (dyn_cast<LoadInst>(newInstr))->setVolatile(true);
+
+        newBuilder.Insert(newInstr);
+      }
     } else {
+      if (newInstr == nullptr) {
+        newInstr = currIn->clone();
+      }
       builder.Insert(newInstr);
     }
 
