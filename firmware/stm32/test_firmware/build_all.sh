@@ -51,6 +51,20 @@ cp build/test_firmware.bin output/ret.bin
 
 export CLANG_FLAGS=""
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/IntegrityProtector/libIntegrityProtector.so"
+#export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/DelayInjector/libDelayInjector.so"
+export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/BranchProtector/libBranchProtector.so"
+export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/LoopProtector/libLoopProtector.so"
+export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/RetProtector/libRetProtector.so"
+export GR_ENUM_FLAGS="-extra-arg-before=-w --allinit -output-postfix bak"
+make clean
+make > output/all_nodelay.txt 2>&1
+cp build/test_firmware.elf output/all_nodelay.elf
+cp build/test_firmware.bin output/all_nodelay.bin
+
+
+
+export CLANG_FLAGS=""
+export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/IntegrityProtector/libIntegrityProtector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/DelayInjector/libDelayInjector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/BranchProtector/libBranchProtector.so"
 export CLANG_FLAGS+=" -Xclang -load -Xclang ../../../instrumenter/build/LoopProtector/libLoopProtector.so"
