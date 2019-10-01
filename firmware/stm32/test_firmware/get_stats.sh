@@ -16,7 +16,7 @@ done
 
 echo ""
 echo "Sizes:"
-files="none branch delay integrity loop ret all"
+files="none branch delay integrity loop ret all_nodelay all"
 awk '/text/{print}' output/all.txt
 for p in $files;
 do
