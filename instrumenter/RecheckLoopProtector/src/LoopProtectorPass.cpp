@@ -43,7 +43,7 @@ public:
   std::set<Instruction *> insertedBranches;
 
   std::string AnnotationString = "NoResistor";
-  std::string TAG = "\033[1;31m[GR/ReLoop]\033[0m ";
+  std::string TAG = "\033[1;31m[GR/Loop]\033[0m ";
   bool Verbose = false;
   LoopProtectorPass() : FunctionPass(ID) { this->grFunction = nullptr; }
 
@@ -148,7 +148,8 @@ public:
     if (isFunctionSafeToModify(&F)) {
       // get all the loops in the function.
       for (auto *lobj : LI.getLoopsInPreorder()) {
-        errs() << TAG << "Instrumenting: " << *lobj << "\n";
+        if (Verbose)
+          errs() << TAG << "Instrumenting: " << *lobj << "\n";
 
         SmallVector<Loop::Edge, 32> exitEdges;
         exitEdges.clear();
