@@ -120,6 +120,11 @@ public:
     bool retVal = true;
 
     try {
+      if (!dyn_cast<SwitchInst>(targetInstr) &&
+          (!dyn_cast<BranchInst>(targetInstr) ||
+           !dyn_cast<BranchInst>(targetInstr)->isConditional())) {
+        return false;
+      }
       // if(Verbose) {
       dbgs() << TAG << "Instrumenting: " << *targetInstr << "\n";
       // }
