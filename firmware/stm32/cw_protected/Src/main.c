@@ -25,9 +25,17 @@ void uart_puts(char *s) {
   }
 }
 
+
+
 unsigned int gr_tick = 0;
 enum valueRtn { GR_SUCCESS = 3889321827, GR_FAILURE = 3552161478, GR_UNKNOWN = 879491493 };
-
+int checkTick() {
+  if (gr_tick == 0) {
+    return 0;
+  } else {
+    return -1;
+  }
+}
 int main(void) {
 
   platform_init();
@@ -35,15 +43,14 @@ int main(void) {
   trigger_setup();
 
   putint(delay_seed);
-  volatile uint32_t val = GR_FAILURE;
-
+  volatile int blah = GR_FAILURE;
   volatile uint32_t val2 = 1;
 
   // Trigger
   *PIN_HIGH = TRIGGER_PIN;
   *PIN_LOW = TRIGGER_PIN;
 
-  if (val == GR_SUCCESS) {
+  if (blah == GR_SUCCESS) {
     uart_puts("Yes!");
   } else {
     uart_puts("No!");
@@ -53,6 +60,9 @@ int main(void) {
     ;
   }
   while (val2 != 2) {
+    ;
+  }
+  while (1) {
     ;
   }
 

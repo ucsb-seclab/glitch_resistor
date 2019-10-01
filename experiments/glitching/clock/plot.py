@@ -46,7 +46,9 @@ for f in onlyfiles:
     total_samples = len(results['parameters']['ext_offsets'])
     total_samples *= len(results['parameters']['widths'])
     total_samples *= len(results['parameters']['offsets'])
-    # total_samples *= results['parameters']['repeat']
+    if len(results['parameters']['repeats']) > 0:
+        total_samples *= len(results['parameters']['repeats'])
+    print(total_samples)
 
     # print(total_samples)
     partials = 0

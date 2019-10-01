@@ -66,6 +66,7 @@ def run_firmware(arm=True, multi_glitch=False):
     :type arm: Should we arm our trigger value?
     :return:
     """
+    logger.info("Running firmware...")
     # Flush UART
     target.flush()
     if arm:
@@ -110,7 +111,7 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
     :param repeats:
     :return:
     """
-    global failed_glitches, detected_glitchesm, successful_glitches_count
+    global failed_glitches, detected_glitches, successful_glitches_count
     for repeat in repeats:
         for ext_offset in ext_offsets:
             for width in widths:
@@ -132,17 +133,17 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                         # Run firmware
                         response = run_firmware()
 
+                        # Was it detected?
+                        if "Glitch" in repr(response):
+                            print ("GR Detected!!", repr(response))
+                            detected = True
+                            detected_glitches += 1
                         # check for glitch success (depends on targets active firmware)
-                        if SUCCESS_OUTPUT in repr(response):
+                        elif SUCCESS_OUTPUT in repr(response):
                             logger.info("Got a success!")
                             success_result = response
                             successes += 1
                             successful_glitches_count += 1
-                        # Was it detected?
-                        elif "Glitch" in repr(response):
-                            print ("GR Detected!!", repr(response))
-                            detected = True
-                            detected_glitches += 1
 
                         else:
                             failed_glitches += 1
@@ -216,8 +217,14 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                     # Run firmware
                     response = run_firmware(multi_glitch=multi_glitch)
 
+                    # Was it detected?
+                    if "Glitch" in repr(response):
+                        print ("GR Detected!!", repr(response))
+                        detected = True
+                        detected_glitches += 1
+
                     # Check for glitch success
-                    if SUCCESS_OUTPUT in repr(response):
+                    elif SUCCESS_OUTPUT in repr(response):
                         logger.info("Got a success!")
                         success_result = response
                         successes += 1
@@ -229,12 +236,6 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                         partial_successes += 1
                         if success_result == "":
                             success_result = response
-
-                    # Was it detected?
-                    elif "Glitch" in repr(response):
-                        print ("GR Detected!!", repr(response))
-                        detected = True
-                        detected_glitches += 1
 
                     else:
                         failed_glitches += 1
@@ -432,7 +433,7 @@ if __name__ == "__main__":
         offsets = numpy.arange(-49, 50, 1)
         repeats = range(30, 8, -2)
 
-    elif args.experiment == "precise_real":
+    elif args.experiment == "scan10":
 
         function_name = None
         sample_size = 1
@@ -448,10 +449,23 @@ if __name__ == "__main__":
         gr_build = True
 
     elif args.experiment == "single_real":
+        """
+        LDR     R1, =0x48000018
+        STR     R0, [R1]
+        STR     R0, [R1,#0x10]
 
+        LDR     R2, [SP,#0x20+var_18] // 0,1: 2 cycles
+        STR     R2, [SP,#0x20+var_14] // 2,3: 2 cycles
+
+        LDR     R0, [SP,#0x20+var_14]
+        LDR     R1, =0xE7D25763
+        CMP     R2, R1
+        BNE     loc_800039A
+        """
         function_name = None
         sample_size = 1
-        ext_offsets = range(0, 10)
+        # Offset changed to account for our copying of the variable
+        ext_offsets = range(4, 15)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
         stop_at_optimal = False
@@ -467,7 +481,7 @@ if __name__ == "__main__":
         ext_offsets = [0]
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        repeats = range(100, -10, -10)
+        repeats = range(10, 110, 10)
 
         fw_dir = "cw_protected"
         fw_path = os.path.join(fw_dir, "build/cw_glitching.hex")
@@ -526,7 +540,7 @@ if __name__ == "__main__":
         'optimal': optimal_params,
         'failures': failed_glitches,
         'successes': successful_glitches,
-        'successful_glitches_count':successful_glitches_count,
+        'successful_glitches_count': successful_glitches_count,
         'partial_successes': partial_successes,
         'detected_glitches': detected_glitches,
         'detections': detected_glitch_results}

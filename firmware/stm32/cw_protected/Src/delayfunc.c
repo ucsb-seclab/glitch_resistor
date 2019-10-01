@@ -54,7 +54,7 @@ __attribute__((annotate("NoDelay"))) void seed_read() {
   delay_seed = *((volatile uint32_t *)0x0800e400);
 }
 
-__attribute__((annotate("NoResistor"))) void gpdelay() {
+__attribute__((annotate("NoDelay"))) void gpdelay() {
   if (delay_writing) {
     return;
   }
