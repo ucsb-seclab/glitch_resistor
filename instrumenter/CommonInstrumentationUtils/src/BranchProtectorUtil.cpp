@@ -62,7 +62,7 @@ static bool canReplicateOperands(Instruction *currIn) {
 bool canReplicateValue(Instruction *currIn) {
   // it should not be a call or a load or constant instruction.
   // TODO: Figure out exactly what we should be checking for here.
-  //return !(dyn_cast<CallInst>(currIn) || dyn_cast<LoadInst>(currIn));
+  // return !(dyn_cast<CallInst>(currIn) || dyn_cast<LoadInst>(currIn));
   return true;
 }
 
@@ -130,8 +130,8 @@ static bool getAllInstrToReplicate(BranchInst &targetInstr,
 
 Value *createNewLocalVariable(Function &F, Type *varType) {
   IRBuilder<> builder(&(*(F.getEntryBlock().getFirstInsertionPt())));
-  AllocaInst *newAlloca = builder.CreateAlloca(
-      varType, nullptr, "volatileLoadVar");
+  AllocaInst *newAlloca =
+      builder.CreateAlloca(varType, nullptr, "volatileLoadVar");
   newAlloca->setAlignment(4);
   return newAlloca;
 }
@@ -194,18 +194,18 @@ static bool duplicateInstructions(IRBuilder<> &builder,
           Type *origCmpType = op1->getType();
           if (!cmoType->isIntegerTy()) {
             cmoType = IntegerType::getInt64Ty(op1->getContext());
-            op1 = builder.CreatePtrToInt(op1, IntegerType::getInt64Ty(op1->getContext()));
-            op2 = builder.CreatePtrToInt(op2, IntegerType::getInt64Ty(op2->getContext()));
+            op1 = builder.CreatePtrToInt(
+                op1, IntegerType::getInt64Ty(op1->getContext()));
+            op2 = builder.CreatePtrToInt(
+                op2, IntegerType::getInt64Ty(op2->getContext()));
           }
 
           errs() << TAG << "Negated.\n";
           // Now, negate them. (When possible)
-          Value *xorOp1 =
-              builder.CreateBinOp(Instruction::BinaryOps::Xor, op1,
-                                  ConstantInt::get(cmoType, ~0));
-          Value *xorOp2 =
-              builder.CreateBinOp(Instruction::BinaryOps::Xor, op2,
-                                  ConstantInt::get(cmoType, ~0));
+          Value *xorOp1 = builder.CreateBinOp(Instruction::BinaryOps::Xor, op1,
+                                              ConstantInt::get(cmoType, ~0));
+          Value *xorOp2 = builder.CreateBinOp(Instruction::BinaryOps::Xor, op2,
+                                              ConstantInt::get(cmoType, ~0));
 
           if (!origCmpType->isIntegerTy()) {
             xorOp1 = builder.CreateIntToPtr(xorOp1, origCmpType);
@@ -227,13 +227,15 @@ static bool duplicateInstructions(IRBuilder<> &builder,
       newBuilder.SetInsertPoint(&(*instrIterator));
 
       if (LI->isVolatile()) {
-        Value *newLocalVar = createNewLocalVariable(*(LI->getFunction()), LI->getType());
+        Value *newLocalVar =
+            createNewLocalVariable(*(LI->getFunction()), LI->getType());
         // make a volatile store.
-        newBuilder.CreateStore(LI, newLocalVar, true);
+        StoreInst *storeInst = newBuilder.CreateStore(LI, newLocalVar, true);
+
         // make a volatile load
         LoadInst *newlyInsertedLoad = newBuilder.CreateLoad(newLocalVar);
+
         newlyInsertedLoad->setVolatile(true);
-        newBuilder.Insert(newlyInsertedLoad);
         newInstr = newlyInsertedLoad;
       } else {
         // this is not a volatile LOAD.
