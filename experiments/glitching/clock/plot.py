@@ -28,6 +28,8 @@ if not os.path.exists("figures"):
         print("Could not create directory ('figures').")
         sys.exit(0)
 
+results_table = []
+
 for f in onlyfiles:
     results = pickle.load(open(os.path.join(path, f), "rb"))
 
@@ -116,7 +118,8 @@ for f in onlyfiles:
 
     print("Success rate:", successes_total / total_samples)
 
-    if "detections" in results and len(results['detections']) > 0 :
+
+    if "detections" in results and len(results['detections']) > 0:
 
         print(
             "Detection rate:", len(results['detections']) /
@@ -131,6 +134,11 @@ for f in onlyfiles:
                 detection_xs.append(ext_offset)
             detection_ys.append(width)
             detection_zs.append(offset)
+
+        results_table.append([f, total_samples, successes_total, len(results[
+            'detections'])])
+    else:
+        results_table.append([f, total_samples, successes_total, 0])
 
     for idx in range(len(xs)):
         l = a3d.Line3D((xs[idx], xs[idx]), (ys[idx], ys[idx]),
@@ -173,9 +181,12 @@ for f in onlyfiles:
 
     # plt.show()
     filename = os.path.join(path, '%s.pdf' % os.path.splitext(f)[0])
-    plt.savefig(filename)
+    plt.savefig(filename, transparent=True)
 
     pprint.pprint(results['parameters'])
 
-
     print ("--\n")
+    
+    
+for r in results_table:
+    print("\t".join([str(x) for x in r]))
