@@ -20,9 +20,12 @@ fw_dir = "cw_glitching"
 fw_path = os.path.join(fw_dir, "build/cw_glitching.hex")
 
 
-def build_firmware(directory, function="LOOP", use_glitch_resistor=False):
+def build_firmware(directory, function="LOOP", use_glitch_resistor=False,
+                   no_delay=False):
     """
     Change the directory and run the appropriate make command
+    :param no_delay: Should we disable the delay defense (only applicable
+    when `use_glitch_resistor` is True.
     :param use_glitch_resistor: Build using make or ./build.sh
     :param directory: The directory of the firmware
     :param function: Do we want to pass a build parameter?
@@ -33,7 +36,10 @@ def build_firmware(directory, function="LOOP", use_glitch_resistor=False):
     os.chdir(directory)
     call(["make", "clean"])
     if use_glitch_resistor:
-        rtn = call(["./build.sh"])
+        if no_delay:
+            rtn = call(["./build.sh NODELAY"])
+        else:
+            rtn = call(["./build.sh"])
     else:
         rtn = call(["make", "FUNC_SEL=%s" % function])
     os.chdir(cwd)
@@ -119,14 +125,32 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
 
                     logger.debug("%d %f %f" % (ext_offset, width, offset))
 
-                    scope.glitch.repeat = repeat
-                    scope.glitch.offset = offset
-                    scope.glitch.ext_offset = ext_offset
-                    scope.glitch.width = width
+                    last_params = (scope.glitch.repeat,
+                                   scope.glitch.offset,
+                                   scope.glitch.ext_offset,
+                                   scope.glitch.width)
+
+                    try:
+                        scope.glitch.repeat = repeat
+                        scope.glitch.offset = offset
+                        scope.glitch.ext_offset = ext_offset
+                        scope.glitch.width = width
+                    except:
+                        logger.exception("Failed to update parameters")
+                        continue
+
+                    if last_params == (scope.glitch.repeat,
+                                       scope.glitch.offset,
+                                       scope.glitch.ext_offset,
+                                       scope.glitch.width):
+                        logger.warning(
+                            "Failed to update CW parameters, skipping iteration. " + str(
+                                last_params))
+                        continue
 
                     successes = 0
                     partials = 0
-                    success_result = ""
+                    success_results = []
                     detected = False
                     for i in range(sample_size):
 
@@ -141,7 +165,7 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                         # check for glitch success (depends on targets active firmware)
                         elif SUCCESS_OUTPUT in repr(response):
                             logger.info("Got a success!")
-                            success_result = response
+                            success_results.append(response)
                             successes += 1
                             successful_glitches_count += 1
 
@@ -153,8 +177,8 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                     params = [scope.glitch.ext_offset, scope.glitch.width,
                               scope.glitch.offset,
                               successes, partial_successes, sample_size,
-                              success_result,
-                              repeat]
+                              success_results,
+                              repeat, time.time()]
 
                     if detected:
                         detected_glitch_results.append(params)
@@ -168,12 +192,12 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                                   repeat,
                                   successes / sample_size,
                                   partials,
-                                  repr(success_result)))
+                                  repr(success_results[0])))
                         successful_glitches.append(params)
 
 
 def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
-                    multi_glitch=False, stop_at_optimal=False,
+                    multi_glitch=False, optimize_parameters=False,
                     max_depth=6):
     """
 
@@ -183,7 +207,7 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
     :param depth:
     :param repeat:
     :param multi_glitch:
-    :param stop_at_optimal:
+    :param optimize_parameters:
     :param max_depth:
     :return:
     """
@@ -202,14 +226,32 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
             for offset in offsets:
                 logger.debug("%d %f %f" % (ext_offset, width, offset))
 
-                scope.glitch.repeat = repeat
-                scope.glitch.offset = offset
-                scope.glitch.ext_offset = ext_offset
-                scope.glitch.width = width
+                last_params = (scope.glitch.repeat,
+                               scope.glitch.offset,
+                               scope.glitch.ext_offset,
+                               scope.glitch.width)
+
+                try:
+                    scope.glitch.repeat = repeat
+                    scope.glitch.offset = offset
+                    scope.glitch.ext_offset = ext_offset
+                    scope.glitch.width = width
+                except:
+                    logger.exception("Failed to update parameters")
+                    continue
+
+                if last_params == (scope.glitch.repeat,
+                                   scope.glitch.offset,
+                                   scope.glitch.ext_offset,
+                                   scope.glitch.width):
+                    logger.warning(
+                        "Failed to update CW parameters, skipping iteration. " + str(
+                            last_params))
+                    continue
 
                 successes = 0
                 partials = 0
-                success_result = ""
+                success_results = []
                 partial_success = False
                 detected = False
                 for i in range(sample_size):
@@ -226,7 +268,7 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                     # Check for glitch success
                     elif SUCCESS_OUTPUT in repr(response):
                         logger.info("Got a success!")
-                        success_result = response
+                        success_results.append(response)
                         successes += 1
                         successful_glitches_count += 1
 
@@ -234,8 +276,8 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                     elif "Yes1" in repr(response) and multi_glitch:
                         partials += 1
                         partial_successes += 1
-                        if success_result == "":
-                            success_result = response
+                        # if success_results == "":
+                        success_results.append(response)
 
                     else:
                         failed_glitches += 1
@@ -244,15 +286,16 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                 params = [scope.glitch.ext_offset, scope.glitch.width,
                           scope.glitch.offset,
                           successes, partials, sample_size,
-                          success_result,
-                          repeat]
+                          success_results,
+                          repeat, time.time()]
 
+                # Store detected glitches
                 if detected:
                     detected_glitch_results.append(params)
 
                 # Are we searching for the most optimal solution?
-                if successes == sample_size and stop_at_optimal:
-                    return params
+                # if successes == sample_size and stop_at_optimal:
+                #     return params
 
                 # Did we have any successes?
                 if successes > 0 or partials > 0:
@@ -264,24 +307,25 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                               repeat,
                               successes / sample_size,
                               partials,
-                              repr(success_result)))
+                              repr(success_results[0])))
                     successful_glitches.append(params)
 
                     # Only Optimize the parameters if we are looking for the
                     # optimal
-                    if stop_at_optimal:
+                    if optimize_parameters:
                         print("** Optimizing...")
-                        rtn = optimize_glitch(range(ext_offset, ext_offset +
-                                                    repeat),
-                                              numpy.arange(width - increment,
-                                                           width + increment,
-                                                           increment),
-                                              numpy.arange(offset - increment,
-                                                           offset + increment,
-                                                           increment),
+                        rtn = optimize_glitch([ext_offset],
+                                              numpy.arange(
+                                                  width - increment * 5,
+                                                  width + increment * 5,
+                                                  increment),
+                                              numpy.arange(
+                                                  offset - increment * 5,
+                                                  offset + increment * 5,
+                                                  increment),
                                               depth=depth + 1,
                                               multi_glitch=multi_glitch,
-                                              stop_at_optimal=stop_at_optimal,
+                                              optimize_parameters=optimize_parameters,
                                               max_depth=max_depth)
 
                         if rtn is not False:
@@ -305,7 +349,7 @@ if __name__ == "__main__":
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
     else:
-        logging.basicConfig(level=logging.ERROR)
+        logging.basicConfig(level=logging.WARNING)
 
     # Connect our scope
     scope = cw.scope()
@@ -341,7 +385,7 @@ if __name__ == "__main__":
     multi_glitch = False
     repeat = 10
     max_depth = 6
-    stop_at_optimal = False
+    optimize_parameters = False
     repeats = []
     gr_build = False
 
@@ -353,7 +397,7 @@ if __name__ == "__main__":
         ext_offsets = range(0, 10)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        stop_at_optimal = True
+        optimize_parameters = True
         multi_glitch = False
         repeat = 10
         max_depth = 6
@@ -365,7 +409,7 @@ if __name__ == "__main__":
         ext_offsets = range(0, 10)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        stop_at_optimal = False
+        optimize_parameters = False
         multi_glitch = False
         repeat = 1
 
@@ -376,7 +420,7 @@ if __name__ == "__main__":
         ext_offsets = range(0, 10)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        stop_at_optimal = False
+        optimize_parameters = False
         multi_glitch = False
         repeat = 1
 
@@ -387,7 +431,7 @@ if __name__ == "__main__":
         ext_offsets = range(0, 10)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        stop_at_optimal = False
+        optimize_parameters = False
         multi_glitch = False
         repeat = 1
 
@@ -398,7 +442,7 @@ if __name__ == "__main__":
         ext_offsets = [0]
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        stop_at_optimal = True
+        optimize_parameters = True
         multi_glitch = False
         max_depth = 6
         repeat = 10
@@ -440,7 +484,7 @@ if __name__ == "__main__":
         ext_offsets = range(0, 110, 10)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        stop_at_optimal = False
+        optimize_parameters = False
         multi_glitch = False
         repeat = 10
         max_depth = 6
@@ -468,7 +512,7 @@ if __name__ == "__main__":
         ext_offsets = range(4, 15)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        stop_at_optimal = False
+        optimize_parameters = False
         multi_glitch = False
         repeat = 1
         fw_dir = "cw_protected"
@@ -514,7 +558,7 @@ if __name__ == "__main__":
                                          offsets,
                                          repeat=repeat,
                                          multi_glitch=multi_glitch,
-                                         stop_at_optimal=stop_at_optimal)
+                                         optimize_parameters=optimize_parameters)
 
     pprint.pprint(successful_glitches)
     print("Partials: ", partial_successes)
@@ -530,11 +574,12 @@ if __name__ == "__main__":
             'ext_offsets': ext_offsets,
             'widths': widths,
             'offsets': offsets,
-            'stop_at_optimal': stop_at_optimal,
+            'optimize_parameters': optimize_parameters,
             'multi_glitch': multi_glitch,
             'repeat': repeat,
             'max_depth': max_depth,
             'repeats': repeats,
+            'time_start': time_start,
             'time_elapsed': time.time() - time_start
         },
         'optimal': optimal_params,

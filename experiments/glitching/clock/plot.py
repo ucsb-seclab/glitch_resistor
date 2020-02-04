@@ -33,10 +33,12 @@ results_table = []
 for f in onlyfiles:
     results = pickle.load(open(os.path.join(path, f), "rb"))
 
+    cycle_plots = {}
+
     if len(results) == 0:
         continue
 
-    # Patch up icorrect logging
+    # Patch up incorrect logging
     if results['parameters']['widths'][-1] == 48:
         results['parameters']['widths'] = np.append(results['parameters'][
                                                         'widths'], 49)
@@ -108,6 +110,15 @@ for f in onlyfiles:
                 value |= ord(ch) << idx
                 idx += 8
 
+            if ext_offset not in cycle_plots:
+                cycle_plots[ext_offset] = {'widths': [],
+                                           'offsets': [],
+                                           'success_rates': []}
+            cycle_plots[ext_offset]['widths'].append(width)
+            cycle_plots[ext_offset]['offsets'].append(offset)
+            cycle_plots[ext_offset]['success_rates'].append(
+                1.0 * successes / sample_size)
+
         if value is not None:
             if value not in values:
                 values[value] = 0
@@ -117,7 +128,6 @@ for f in onlyfiles:
     ax = fig.add_subplot(111, projection='3d')
 
     print("Success rate:", successes_total / total_samples)
-
 
     if "detections" in results and len(results['detections']) > 0:
 
@@ -136,7 +146,7 @@ for f in onlyfiles:
             detection_zs.append(offset)
 
         results_table.append([f, total_samples, successes_total, len(results[
-            'detections'])])
+                                                                         'detections'])])
     else:
         results_table.append([f, total_samples, successes_total, 0])
 
@@ -182,11 +192,41 @@ for f in onlyfiles:
     # plt.show()
     filename = os.path.join(path, '%s.pdf' % os.path.splitext(f)[0])
     plt.savefig(filename, transparent=True)
+    plt.close()
 
     pprint.pprint(results['parameters'])
 
     print ("--\n")
-    
-    
+
+    if len(cycle_plots.keys()) == 0:
+        continue
+
+    fig, axs = plt.subplots(1, max(cycle_plots.keys()) + 1, sharex='col',
+                            sharey='row',
+                            gridspec_kw={'hspace': 0, 'wspace': 0},
+                            figsize=(10 * (max(cycle_plots.keys()) + 1), 10))
+    print(cycle_plots)
+    print(axs)
+    for ext_offset in cycle_plots:
+        rgba_colors = np.zeros(
+            (len(cycle_plots[ext_offset]['success_rates']), 4))
+        # for red the first column needs to be one
+        rgba_colors[:, 0] = 1.0
+        # the fourth column needs to be your alphas
+        rgba_colors[:, 3] = cycle_plots[ext_offset]['success_rates']
+        if len(cycle_plots.keys()) == 1:
+            cur_axs = axs
+        else:
+            cur_axs = axs[ext_offset]
+        cur_axs.scatter(cycle_plots[ext_offset]['widths'],
+                        cycle_plots[ext_offset]['offsets'],
+                        color=rgba_colors)
+    # Save to file
+    filename = os.path.join(path, '%s_cycles.pdf' % (
+        os.path.splitext(f)[0]))
+    fig.savefig(filename, transparent=True)
+    # plt.show()
+    plt.close()
+
 for r in results_table:
     print("\t".join([str(x) for x in r]))
