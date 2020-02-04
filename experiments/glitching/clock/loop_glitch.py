@@ -152,6 +152,7 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                     partials = 0
                     success_results = []
                     detected = False
+                    failed = False
                     for i in range(sample_size):
 
                         # Run firmware
@@ -170,7 +171,7 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
                             successful_glitches_count += 1
 
                         else:
-                            failed_glitches += 1
+                            failed = True
 
                     # Save our successful glitches
                     # Save our successful glitches
@@ -182,6 +183,9 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
 
                     if detected:
                         detected_glitch_results.append(params)
+                    if failed:
+                        failed_glitches.append(params)
+
                     # Did we have any successes?
                     if successes > 0 or partials > 0:
                         print("* Ext. Offset: %d Width: %f Offset: %f Repeat: "
@@ -216,7 +220,7 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
     if depth > max_depth:
         return False
 
-    increment = 1 / (10.0 * depth);
+    increment = 1 / (10.0 ** depth)
 
     # print(ext_offsets)
     # print(widths)
@@ -254,6 +258,7 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                 success_results = []
                 partial_success = False
                 detected = False
+                failed = False
                 for i in range(sample_size):
 
                     # Run firmware
@@ -280,7 +285,7 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                         success_results.append(response)
 
                     else:
-                        failed_glitches += 1
+                        failed = True
 
                 # Save our successful glitches
                 params = [scope.glitch.ext_offset, scope.glitch.width,
@@ -292,7 +297,8 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                 # Store detected glitches
                 if detected:
                     detected_glitch_results.append(params)
-
+                if failed:
+                    failed_glitches.append(params)
                 # Are we searching for the most optimal solution?
                 # if successes == sample_size and stop_at_optimal:
                 #     return params
@@ -313,7 +319,16 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                     # Only Optimize the parameters if we are looking for the
                     # optimal
                     if optimize_parameters:
-                        print("** Optimizing...")
+                        print("** Optimizing (depth: %d)..." % depth)
+                        # print(increment)
+                        # print(numpy.arange(
+                        #                           width - increment * 5,
+                        #                           width + increment * 5,
+                        #                           increment),
+                        #                       numpy.arange(
+                        #                           offset - increment * 5,
+                        #                           offset + increment * 5,
+                        #                           increment))
                         rtn = optimize_glitch([ext_offset],
                                               numpy.arange(
                                                   width - increment * 5,
@@ -340,6 +355,8 @@ if __name__ == "__main__":
                         help="'single', 'multi', or 'long' glitch experiment")
     parser.add_argument("-d", "--debug", action="store_true",
                         help="Enable debug output")
+    parser.add_argument("--nodelay", action="store_true", default=False,
+                        help="Disable the delay defense in experiments.")
     parser.add_argument("-o", "--output", type=str,
                         default="glitch_successes.pickle",
                         help="Output filename")
@@ -349,7 +366,7 @@ if __name__ == "__main__":
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
     else:
-        logging.basicConfig(level=logging.WARNING)
+        logging.basicConfig(level=logging.ERROR)
 
     # Connect our scope
     scope = cw.scope()
@@ -379,7 +396,7 @@ if __name__ == "__main__":
     detected_glitch_results = []
     detected_glitches = 0
     partial_successes = 0
-    failed_glitches = 0
+    failed_glitches = []
     successful_glitches_count = 0
 
     multi_glitch = False
@@ -424,6 +441,17 @@ if __name__ == "__main__":
         multi_glitch = False
         repeat = 1
 
+    elif args.experiment == "single_one_optimal":
+        function_name = "SINGLEONE"
+        sample_size = 10
+        ext_offsets = range(0, 10)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
+        optimize_parameters = True
+        multi_glitch = False
+        max_depth = 6
+        repeat = 10
+
     elif args.experiment == "store":
 
         function_name = "NOZERO"
@@ -439,7 +467,7 @@ if __name__ == "__main__":
 
         function_name = "NOZERO"
         sample_size = 10
-        ext_offsets = [0]
+        ext_offsets = range(0, 10)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
         optimize_parameters = True
@@ -471,6 +499,14 @@ if __name__ == "__main__":
 
     elif args.experiment == "long":
         function_name = "LONG"
+        sample_size = 1
+        ext_offsets = [0]
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
+        repeats = range(30, 8, -2)
+
+    elif args.experiment == "long_fixed":
+        function_name = "LONGFIXED"
         sample_size = 1
         ext_offsets = [0]
         widths = numpy.arange(-49, 50, 1)
@@ -537,7 +573,8 @@ if __name__ == "__main__":
 
     # Build and flash our firmware
     if not build_firmware(fw_dir, function=function_name,
-                          use_glitch_resistor=gr_build):
+                          use_glitch_resistor=gr_build,
+                          no_delay=args.nodelay):
         logger.error("Could not build firmware")
     cw.program_target(scope, prog, fw_path)
 

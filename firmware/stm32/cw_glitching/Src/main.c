@@ -238,6 +238,7 @@ void multi_glitch(void) {
     ;
   }
 }
+
 void long_glitch(void) {
   // Some fake variable
   volatile uint8_t a = 1;
@@ -252,6 +253,40 @@ void long_glitch(void) {
     ;
   }
   while (b != 0) {
+    ;
+  }
+  uart_puts("Yes!");
+  putch('\n');
+  putch(a);
+  putch(b);
+  putch('\n');
+
+  // Several loops in order to try and prevent restarting
+  while (a != 2) {
+    ;
+  }
+  while (a != 2) {
+    ;
+  }
+  while (1) {
+    ;
+  }
+}
+
+void long_glitch_fixed(void) {
+  // Some fake variable
+  volatile uint8_t a = 3889321827;
+  volatile uint8_t b = 3889321827;
+
+  // Trigger
+  *PIN_HIGH = TRIGGER_PIN;
+  *PIN_LOW = TRIGGER_PIN;
+
+  // Infinite loops
+  while (a != 3552161478) {
+    ;
+  }
+  while (b != 3552161478) {
     ;
   }
   uart_puts("Yes!");
@@ -311,6 +346,10 @@ int main(void) {
 #ifdef LONG
     uart_puts("long\n");
     long_glitch();
+#endif
+#ifdef LONGFIXED
+    uart_puts("longfixed\n");
+    long_glitch_fixed();
 #endif
   }
 
