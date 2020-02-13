@@ -127,7 +127,7 @@ for f in onlyfiles:
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
-    print("Success rate:", successes_total / total_samples)
+    print("Success rate:", successes_total / total_samples, results['failures'])
 
     if "detections" in results and len(results['detections']) > 0:
 

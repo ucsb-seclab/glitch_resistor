@@ -238,6 +238,67 @@ void multi_glitch(void) {
     ;
   }
 }
+void multi_glitch_one(void) {
+  // Some fake variable
+  volatile uint8_t a = 0;
+
+  // Trigger
+  *PIN_HIGH = TRIGGER_PIN;
+  *PIN_LOW = TRIGGER_PIN;
+
+  // Infinite loop
+  while (!a) {
+    ;
+  }
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+  asm("nop");
+
+  asm("mov r0, r2");
+  asm("bl putint");
+  putch('\n');
+  uart_puts("Yes1!");
+  putch('\n');
+  for (int i = 0; i < 100000; i++) {
+    asm("nop");
+  }
+
+  *PIN_HIGH = TRIGGER_PIN;
+  *PIN_LOW = TRIGGER_PIN;
+
+  while (!a) {
+    ;
+  }
+
+  asm("mov r0, r2");
+  asm("bl putint");
+  putch('\n');
+  uart_puts("Yes!");
+  putch('\n');
+  putch(a);
+  putch('\n');
+
+  // Several loops in order to try and prevent restarting
+  while (a != 2) {
+    ;
+  }
+  while (a != 2) {
+    ;
+  }
+  while (1) {
+    ;
+  }
+}
 
 void long_glitch(void) {
   // Some fake variable
@@ -257,9 +318,42 @@ void long_glitch(void) {
   }
   uart_puts("Yes!");
   putch('\n');
-  putch(a);
-  putch(b);
+  putint(a);
   putch('\n');
+  putint(b);
+
+  // Several loops in order to try and prevent restarting
+  while (a != 2) {
+    ;
+  }
+  while (a != 2) {
+    ;
+  }
+  while (1) {
+    ;
+  }
+}
+void long_glitch_one(void) {
+  // Some fake variable
+  volatile uint8_t a = 0;
+  volatile uint8_t b = 0;
+
+  // Trigger
+  *PIN_HIGH = TRIGGER_PIN;
+  *PIN_LOW = TRIGGER_PIN;
+
+  // Infinite loops
+  while (!a) {
+    ;
+  }
+  while (!b) {
+    ;
+  }
+  uart_puts("Yes!");
+  putch('\n');
+  putint(a);
+  putch('\n');
+  putint(b);
 
   // Several loops in order to try and prevent restarting
   while (a != 2) {
@@ -291,9 +385,9 @@ void long_glitch_fixed(void) {
   }
   uart_puts("Yes!");
   putch('\n');
-  putch(a);
-  putch(b);
+  putint(a);
   putch('\n');
+  putch(b);
 
   // Several loops in order to try and prevent restarting
   while (a != 2) {
@@ -338,6 +432,10 @@ int main(void) {
     uart_puts("multi\n");
     multi_glitch();
 #endif
+#ifdef DOUBLEONE
+    uart_puts("multione\n");
+    multi_glitch_one();
+#endif
 
 #ifdef DOUBLEFIXED
     uart_puts("multi_fixed\n");
@@ -346,6 +444,10 @@ int main(void) {
 #ifdef LONG
     uart_puts("long\n");
     long_glitch();
+#endif
+#ifdef LONGONE
+    uart_puts("longone\n");
+    long_glitch_one();
 #endif
 #ifdef LONGFIXED
     uart_puts("longfixed\n");

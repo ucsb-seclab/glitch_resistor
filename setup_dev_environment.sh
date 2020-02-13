@@ -64,6 +64,10 @@ echo "export LLVM_OBJ=$PWD/llvm-8.0.0.obj" >> .envrc
 echo "export LLVM_DIR=$PWD/llvm-8.0.0.obj" >> .envrc
 echo "PATH_add $PWD/llvm-8.0.0.obj/bin" >> .envrc
 
+
 direnv allow .
 
 
+
+cd emulation
+./install_depedencies.sh

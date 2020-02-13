@@ -44,22 +44,46 @@ int main(void) {
 
   putint(delay_seed);
   volatile int blah = GR_FAILURE;
-  volatile uint32_t val2 = 1;
+  volatile uint32_t one = 1;
+  volatile uint32_t zero = 0;
 
   // Trigger
   *PIN_HIGH = TRIGGER_PIN;
   *PIN_LOW = TRIGGER_PIN;
-
+#ifdef WHILE1
+  while (one) {
+    ;
+  }
+  asm("bl putint");
+  putch('\n');
+  uart_puts("Yes!");
+#elif WHILENOT0
+  while (!zero) {
+    ;
+  }
+  asm("bl putint");
+  putch('\n');
+  uart_puts("Yes!");
+#elif WHILEFIXED
+  while (blah != GR_SUCCESS) {
+    ;
+  }
+  asm("bl putint");
+  putch('\n');
+  uart_puts("Yes!");
+#else
   if (blah == GR_SUCCESS) {
+    asm("bl putint");
+    putch('\n');
     uart_puts("Yes!");
   } else {
     uart_puts("No!");
   }
-
-  while (val2 != 2) {
+#endif
+  while (one != 2) {
     ;
   }
-  while (val2 != 2) {
+  while (zero != 2) {
     ;
   }
   while (1) {

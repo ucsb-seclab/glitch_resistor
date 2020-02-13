@@ -37,9 +37,9 @@ def build_firmware(directory, function="LOOP", use_glitch_resistor=False,
     call(["make", "clean"])
     if use_glitch_resistor:
         if no_delay:
-            rtn = call(["./build.sh NODELAY"])
+            rtn = call(["./build.sh", "NODELAY", str(function)])
         else:
-            rtn = call(["./build.sh"])
+            rtn = call(["./build.sh", "all", str(function)])
     else:
         rtn = call(["make", "FUNC_SEL=%s" % function])
     os.chdir(cwd)
@@ -108,7 +108,7 @@ def run_firmware(arm=True, multi_glitch=False):
     return rtn
 
 
-def long_glitch(ext_offsets, widths, offsets, repeats):
+def long_glitch(ext_offsets, widths, offsets, repeats, sample_size=1):
     """
     Attempt to lengthen the glitch to skip multiple branches
     :param ext_offsets:
@@ -123,7 +123,8 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
             for width in widths:
                 for offset in offsets:
 
-                    logger.debug("%d %f %f" % (ext_offset, width, offset))
+                    logger.debug("Ext Offset: %d Width: %f Offset: %f" % (
+                        ext_offset, width, offset))
 
                     last_params = (scope.glitch.repeat,
                                    scope.glitch.offset,
@@ -202,7 +203,7 @@ def long_glitch(ext_offsets, widths, offsets, repeats):
 
 def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                     multi_glitch=False, optimize_parameters=False,
-                    max_depth=6):
+                    max_depth=6, sample_size=1):
     """
 
     :param ext_offsets:
@@ -226,6 +227,8 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
     # print(widths)
     # print(offsets)
     for ext_offset in ext_offsets:
+        max_params = None
+        max_successes = -1
         for width in widths:
             for offset in offsets:
                 logger.debug("%d %f %f" % (ext_offset, width, offset))
@@ -259,6 +262,11 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                 partial_success = False
                 detected = False
                 failed = False
+
+                # if depth == 1:
+                #     sample_size_cur = 1
+                # else:
+                #     sample_size_cur = sample_size
                 for i in range(sample_size):
 
                     # Run firmware
@@ -300,7 +308,8 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                 if failed:
                     failed_glitches.append(params)
                 # Are we searching for the most optimal solution?
-                # if successes == sample_size and stop_at_optimal:
+                # if successes == sample_size and optimize_parameters and \
+                #    depth > 1:
                 #     return params
 
                 # Did we have any successes?
@@ -315,36 +324,43 @@ def optimize_glitch(ext_offsets, widths, offsets, depth=1, repeat=1,
                               partials,
                               repr(success_results[0])))
                     successful_glitches.append(params)
+                    if successes > max_successes:
+                        max_params = [(width, offset)]
+                        max_successes = successes
+                    elif successes == max_successes:
+                        max_params.append((width, offset))
+        # Only Optimize the parameters if we are looking for the
+        # optimal
+        if optimize_parameters and max_params is not None:
+            print("** Optimizing (depth: %d)..." % depth)
+            # print(increment)
+            # print(numpy.arange(
+            #                           width - increment * 5,
+            #                           width + increment * 5,
+            #                           increment),
+            #                       numpy.arange(
+            #                           offset - increment * 5,
+            #                           offset + increment * 5,
+            #                           increment))
+            for width, offset in max_params:
+                print("width: %f, offset: %f" % (width, offset))
+                rtn = optimize_glitch([ext_offset],
+                                      numpy.arange(
+                                          width - increment * 5,
+                                          width + increment * 5,
+                                          increment),
+                                      numpy.arange(
+                                          offset - increment * 5,
+                                          offset + increment * 5,
+                                          increment),
+                                      depth=depth + 1,
+                                      multi_glitch=multi_glitch,
+                                      optimize_parameters=optimize_parameters,
+                                      max_depth=max_depth,
+                                      sample_size=sample_size)
 
-                    # Only Optimize the parameters if we are looking for the
-                    # optimal
-                    if optimize_parameters:
-                        print("** Optimizing (depth: %d)..." % depth)
-                        # print(increment)
-                        # print(numpy.arange(
-                        #                           width - increment * 5,
-                        #                           width + increment * 5,
-                        #                           increment),
-                        #                       numpy.arange(
-                        #                           offset - increment * 5,
-                        #                           offset + increment * 5,
-                        #                           increment))
-                        rtn = optimize_glitch([ext_offset],
-                                              numpy.arange(
-                                                  width - increment * 5,
-                                                  width + increment * 5,
-                                                  increment),
-                                              numpy.arange(
-                                                  offset - increment * 5,
-                                                  offset + increment * 5,
-                                                  increment),
-                                              depth=depth + 1,
-                                              multi_glitch=multi_glitch,
-                                              optimize_parameters=optimize_parameters,
-                                              max_depth=max_depth)
-
-                        if rtn is not False:
-                            return rtn
+                if rtn is not False:
+                    return rtn
 
     return False
 
@@ -353,6 +369,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("experiment", type=str,
                         help="'single', 'multi', or 'long' glitch experiment")
+    parser.add_argument("-f", "--force", action="store_true", default=False,
+                        help="Force overwrite of output file.")
+    parser.add_argument("--function", type=str, default=None,
+                        help="Function to compile")
     parser.add_argument("-d", "--debug", action="store_true",
                         help="Enable debug output")
     parser.add_argument("--nodelay", action="store_true", default=False,
@@ -367,6 +387,11 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.ERROR)
+
+    if os.path.exists(args.output) and not args.force:
+        logger.error("Output file (%s) already exists!  Choose a different "
+                     "name, or  use '-f' flag." % args.output)
+        sys.exit(0)
 
     # Connect our scope
     scope = cw.scope()
@@ -411,19 +436,19 @@ if __name__ == "__main__":
 
         function_name = "SINGLE"
         sample_size = 10
-        ext_offsets = range(0, 10)
+        ext_offsets = range(0, 8)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
         optimize_parameters = True
         multi_glitch = False
-        repeat = 10
+        repeat = 1
         max_depth = 6
     # Single glitch
     elif args.experiment == "single":
 
         function_name = "SINGLE"
         sample_size = 1
-        ext_offsets = range(0, 10)
+        ext_offsets = range(0, 8)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
         optimize_parameters = False
@@ -434,7 +459,7 @@ if __name__ == "__main__":
 
         function_name = "SINGLEONE"
         sample_size = 1
-        ext_offsets = range(0, 10)
+        ext_offsets = range(0, 8)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
         optimize_parameters = False
@@ -450,13 +475,13 @@ if __name__ == "__main__":
         optimize_parameters = True
         multi_glitch = False
         max_depth = 6
-        repeat = 10
+        repeat = 1
 
     elif args.experiment == "store":
 
         function_name = "NOZERO"
         sample_size = 1
-        ext_offsets = range(0, 10)
+        ext_offsets = range(0, 8)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
         optimize_parameters = False
@@ -467,20 +492,29 @@ if __name__ == "__main__":
 
         function_name = "NOZERO"
         sample_size = 10
-        ext_offsets = range(0, 10)
+        ext_offsets = range(0, 8)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
         optimize_parameters = True
         multi_glitch = False
         max_depth = 6
-        repeat = 10
+        repeat = 1
 
     # Multi-glitch
     elif args.experiment == "multi":
 
         function_name = "DOUBLE"
         sample_size = 1
-        ext_offsets = range(0, 10)
+        ext_offsets = range(0, 8)
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
+        multi_glitch = True
+        repeat = 1
+    elif args.experiment == "multi_one":
+
+        function_name = "DOUBLEONE"
+        sample_size = 1
+        ext_offsets = range(0, 8)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
         multi_glitch = True
@@ -491,7 +525,7 @@ if __name__ == "__main__":
 
         function_name = "DOUBLEFIXED"
         sample_size = 1
-        ext_offsets = range(0, 10)
+        ext_offsets = range(0, 8)
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
         multi_glitch = True
@@ -503,7 +537,15 @@ if __name__ == "__main__":
         ext_offsets = [0]
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        repeats = range(30, 8, -2)
+        repeats = range(10, 21, 1)
+
+    elif args.experiment == "long_one":
+        function_name = "LONGONE"
+        sample_size = 1
+        ext_offsets = [0]
+        widths = numpy.arange(-49, 50, 1)
+        offsets = numpy.arange(-49, 50, 1)
+        repeats = range(10, 21, 1)
 
     elif args.experiment == "long_fixed":
         function_name = "LONGFIXED"
@@ -511,7 +553,7 @@ if __name__ == "__main__":
         ext_offsets = [0]
         widths = numpy.arange(-49, 50, 1)
         offsets = numpy.arange(-49, 50, 1)
-        repeats = range(30, 8, -2)
+        repeats = range(10, 21, 1)
 
     elif args.experiment == "scan10":
 
@@ -538,6 +580,7 @@ if __name__ == "__main__":
         STR     R2, [SP,#0x20+var_14] // 2,3: 2 cycles
 
         LDR     R0, [SP,#0x20+var_14]
+        BL      gpdelay                 // optional
         LDR     R1, =0xE7D25763
         CMP     R2, R1
         BNE     loc_800039A
@@ -571,6 +614,8 @@ if __name__ == "__main__":
         logger.error("Invalid experiment name (%s)!" % args.experiment)
         sys.exit(0)
 
+    if args.function is not None:
+        function_name = args.function
     # Build and flash our firmware
     if not build_firmware(fw_dir, function=function_name,
                           use_glitch_resistor=gr_build,
@@ -595,7 +640,9 @@ if __name__ == "__main__":
                                          offsets,
                                          repeat=repeat,
                                          multi_glitch=multi_glitch,
-                                         optimize_parameters=optimize_parameters)
+                                         optimize_parameters=optimize_parameters,
+                                         max_depth=max_depth,
+                                         sample_size=sample_size)
 
     pprint.pprint(successful_glitches)
     print("Partials: ", partial_successes)

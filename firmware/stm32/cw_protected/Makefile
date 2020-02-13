@@ -93,8 +93,8 @@ AS_DEFS =
 
 # C defines
 C_DEFS =  \
--DSTM32F071xB
-
+-DSTM32F071xB \
+-D$(FUNC_SEL)
 
 # AS includes
 AS_INCLUDES =
