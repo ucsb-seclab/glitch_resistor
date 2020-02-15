@@ -13,3 +13,13 @@ speed 4000
 device Cortex-M0
 r
 ```
+To set a breakpoint right before the glitch function is called:
+```bash
+SetBP 800036c
+g
+regs
+```
+To single step:
+```bash
+s
+```
