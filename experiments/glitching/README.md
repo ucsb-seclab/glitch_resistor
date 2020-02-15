@@ -23,3 +23,8 @@ To single step:
 ```bash
 s
 ```
+Dump the stack:
+```bash
+mem32 20003F08 39
+mem32 20003FE8 6
+```
